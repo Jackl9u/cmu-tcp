@@ -41,6 +41,41 @@ typedef enum {
 } cmu_socket_type_t;
 
 /**
+ * CMU-TCP connection states.
+ * 
+ * 3-way handshake process
+ * 
+ * Step 1: SYN
+ *  client sends a SYN packet with SeqNum = ISN to server
+ *  client state : CLOSED -> SYN_SENT
+ *  server satte : LISTEN
+ * 
+ * Step 2: SYN-ACK
+ *  server receives the SYN and responds with a SYN-ACK packet, with AckNum = client ISN + 1, SEQ = ISN
+ *  client state : SYN_SENT
+ *  server state : LISTEN -> SYN_RECEIVED
+ *  
+ * Step 3: ACK
+ *  client receives the SYN-ACK from server, and responds with a ACK packet, AckNum = server ISN + 1
+ *  client state : SYN_SENT -> ESTABLISHED
+ *  server state : SYN_RECEIVED
+ * 
+ * Step 4: 
+ *  server receives the ACK from client
+ *  client state : ESTABLISHED
+ *  server state : ESTABLISHED
+ */
+typedef enum {
+  CLOSED = 0,         // client
+  SYN_SENT = 1,
+  // ESTABLISHED,
+
+  LISTEN = 2,         // server
+  SYN_RECEIVED = 3,
+  ESTABLISHED = 4,
+} cmu_tcp_state_t;
+
+/**
  * This structure holds the state of a socket. You may modify this structure as
  * you see fit to include any additional state you need for your implementation.
  */
@@ -60,6 +95,9 @@ typedef struct {
   int dying;
   pthread_mutex_t death_lock;
   window_t window;
+  
+  // 3-way handshake
+  cmu_tcp_state_t conn_state;
 } cmu_socket_t;
 
 /*

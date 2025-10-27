@@ -20,6 +20,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "backend.h"
 
@@ -51,8 +52,8 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   // FIXME: Sequence numbers should be randomly initialized. The next expected
   // sequence number should be initialized according to the SYN packet from the
   // other side of the connection.
-  sock->window.last_ack_received = 0;
-  sock->window.next_seq_expected = 0;
+  sock->window.last_ack_received = (srand(time(NULL) ^ getpid()), rand());
+  sock->window.next_seq_expected = 0; // to be initialized from the SYN packet from the other side
 
   if (pthread_cond_init(&sock->wait_cond, NULL) != 0) {
     perror("ERROR condition variable not set\n");
@@ -60,7 +61,7 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   }
 
   switch (socket_type) {
-    case TCP_INITIATOR:
+    case TCP_INITIATOR:  // client
       if (server_ip == NULL) {
         perror("ERROR server_ip NULL");
         return EXIT_ERROR;
@@ -79,9 +80,10 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
         return EXIT_ERROR;
       }
 
+      sock->conn_state = CLOSED;
       break;
 
-    case TCP_LISTENER:
+    case TCP_LISTENER:  // server
       memset(&conn, 0, sizeof(conn));
       conn.sin_family = AF_INET;
       conn.sin_addr.s_addr = htonl(INADDR_ANY);
@@ -95,6 +97,8 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
         return EXIT_ERROR;
       }
       sock->conn = conn;
+
+      sock->conn_state = LISTEN;
       break;
 
     default:
