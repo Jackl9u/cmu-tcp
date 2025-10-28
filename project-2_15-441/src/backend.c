@@ -220,6 +220,7 @@ void single_send(cmu_socket_t *sock, uint8_t *data, int buf_len) {
 // called by the client upon starting the connection 
 void threeWayHandshakeClient(void *in) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
+  size_t conn_len = sizeof(sock->conn);
   
   // Step 1 : the client sends the SYN packet
   assert(sock->conn_state == CLOSED);
@@ -242,12 +243,45 @@ void threeWayHandshakeClient(void *in) {
 
   sock->conn_state = SYN_SENT;
 
-  size_t conn_len = sizeof(sock->conn);
   sendto(sock->socket, syn_packet, plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
+  free(syn_packet);
 
-  // Step 3 : the client sends the ACK packet
+  // Step 3 : the client receives the SYN-ACK and responds with a ACK packet
+  uint32_t exp_recv_len = sizeof(cmu_tcp_header_t);
+  uint32_t buf_size = 0;
+  uint32_t n = 0;
+  uint8_t *packet = malloc(exp_recv_len);
+  while (buf_size < exp_recv_len) {
+    n = recvfrom(sock->socket, packet + buf_size, exp_recv_len - buf_size, 0,
+                  (struct sockaddr *)&(sock->conn), &conn_len);
+    buf_size = buf_size + n;
+  }
+  cmu_tcp_header_t *syn_ack_packet = (cmu_tcp_header_t*) packet;
 
+  sock->window.last_ack_received = syn_ack_packet->ack_num;
+  sock->window.next_seq_expected = syn_ack_packet->seq_num + 1;
+
+  src = sock->my_port;
+  dst = ntohs(sock->conn.sin_port);
+  seq = sock->window.last_ack_received;
+  ack = sock->window.next_seq_expected;
+  hlen = sizeof(cmu_tcp_header_t);
+  plen = hlen + 0 + 0;                  // 0 extension len, 0 payload len
+  flags = ACK_FLAG_MASK;
+  adv_window = CP1_WINDOW_SIZE;
+  ext_len = 0;
+  ext_data = NULL;
+  payload = NULL;
+  payload_len = 0;
+
+  uint8_t *ack_packet = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
+                          ext_len, ext_data, payload, payload_len);
+
+  sock->conn_state = ESTABLISHED;
   
+  sendto(sock->socket, ack_packet, plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
+  free(packet);
+  free(ack_packet);
 }
 
 void threeWayHandshakeServer(void *in) {
@@ -258,19 +292,23 @@ void threeWayHandshakeServer(void *in) {
   // the first message should be a syn packet, get the sender's address from this packet
   assert(sock->conn_state == LISTEN);
 
-  uint32_t plen = sizeof(cmu_tcp_header_t), buf_size = 0, n = 0;
-  uint8_t *packet = malloc(plen);
-  while (buf_size < plen) {
-    n = recvfrom(sock->socket, packet + buf_size, plen - buf_size, 0,
+  uint32_t exp_recv_len = sizeof(cmu_tcp_header_t);
+  uint32_t buf_size = 0;
+  uint32_t n = 0;
+  uint8_t *packet = malloc(exp_recv_len);
+  while (buf_size < exp_recv_len) {
+    n = recvfrom(sock->socket, packet + buf_size, exp_recv_len - buf_size, 0,
                   (struct sockaddr *)&(sock->conn), &conn_len);
     buf_size = buf_size + n;
   }
   cmu_tcp_header_t *syn_packet = (cmu_tcp_header_t*) packet;
 
+  sock->window.next_seq_expected = syn_packet->seq_num + 1;
+
   uint16_t src = sock->my_port;
   uint16_t dst = ntohs(sock->conn.sin_port);
   uint32_t seq = sock->window.last_ack_received; // this field is used to store a random ISN
-  uint32_t ack = syn_packet->seq_num + 1;
+  uint32_t ack = sock->window.next_seq_expected;
   uint16_t hlen = sizeof(cmu_tcp_header_t);
   uint16_t plen = hlen + 0 + 0;                  // 0 extension len, 0 payload len
   uint8_t flags = SYN_FLAG_MASK | ACK_FLAG_MASK;
@@ -283,17 +321,32 @@ void threeWayHandshakeServer(void *in) {
   uint8_t *syn_ack_packet = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                           ext_len, ext_data, payload, payload_len);
 
-  sock->window.next_seq_expected = ????
   sock->conn_state = SYN_RECEIVED;
 
-  size_t conn_len = sizeof(sock->conn);
   sendto(sock->socket, syn_ack_packet, plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
+  free(packet);
+  free(syn_ack_packet);
 
   // Step 4 : wait ACK from client
+  exp_recv_len = sizeof(cmu_tcp_header_t);
+  buf_size = 0;
+  n = 0;
+  packet = malloc(exp_recv_len);
+  while (buf_size < exp_recv_len) {
+    n = recvfrom(sock->socket, packet + buf_size, exp_recv_len - buf_size, 0,
+                  (struct sockaddr *)&(sock->conn), &conn_len);
+    buf_size = buf_size + n;
+  }
+  // ACK packet from the client
+  cmu_tcp_header_t *ack_packet = (cmu_tcp_header_t*) packet;
 
+  sock->window.last_ack_received = ack_packet->ack_num;
+  sock->window.next_seq_expected = ack_packet->seq_num + 1;
 
+  sock->conn_state = ESTABLISHED;
+
+  free(packet);
 }
-
 
 void *begin_backend(void *in) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
