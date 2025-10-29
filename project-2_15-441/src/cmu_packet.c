@@ -18,6 +18,7 @@
 #include <stdint.h>
 #include <stdlib.h>
 #include <string.h>
+#include <stdio.h>
 
 uint16_t get_src(cmu_tcp_header_t* header) {
   return ntohs(header->source_port);
@@ -47,6 +48,24 @@ uint16_t get_extension_length(cmu_tcp_header_t* header) {
 
 uint8_t* get_extension_data(cmu_tcp_header_t* header) {
   return (uint8_t*)(header + 1);
+}
+
+void print_header(cmu_tcp_header_t* header) {
+  printf("  identifier : %u\n", ntohl(header->identifier));
+  printf("  source_port : %u\n", get_src(header));        // Uses ntohs()
+  printf("  destination_port : %u\n", get_dst(header));   // Uses ntohs()
+  printf("  seq_num : %u\n", get_seq(header));            // Uses ntohl()
+  printf("  ack_num : %u\n", get_ack(header));            // Uses ntohl()
+  printf("  hlen : %u\n", get_hlen(header));              // Uses ntohs()
+  printf("  plen : %u\n", get_plen(header));              // Uses ntohs()
+  uint8_t flags_val = get_flags(header);
+  printf("  flags : ");
+  for (int i = 7; i >= 0; i--) {
+    printf("%d", (flags_val >> i) & 1);
+  }
+  printf("\n");
+  printf("  advertised_window : %u\n", get_advertised_window(header)); // Uses ntohs()
+  printf("  extension_length : %u\n", get_extension_length(header));   // Uses ntohs()
 }
 
 void set_src(cmu_tcp_header_t* header, uint16_t src) {

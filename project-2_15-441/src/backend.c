@@ -220,7 +220,7 @@ void single_send(cmu_socket_t *sock, uint8_t *data, int buf_len) {
 // called by the client upon starting the connection 
 void threeWayHandshakeClient(void *in) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
-  size_t conn_len = sizeof(sock->conn);
+  socklen_t conn_len = sizeof(sock->conn);
   
   // Step 1 : the client sends the SYN packet
   assert(sock->conn_state == CLOSED);
@@ -240,11 +240,12 @@ void threeWayHandshakeClient(void *in) {
 
   uint8_t *syn_packet = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                           ext_len, ext_data, payload, payload_len);
-
-  sock->conn_state = SYN_SENT;
+  printf("Client : sent SYN packet to server\n");
+  print_header((cmu_tcp_header_t*)syn_packet);
 
   sendto(sock->socket, syn_packet, plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
   free(syn_packet);
+  sock->conn_state = SYN_SENT;
 
   // Step 3 : the client receives the SYN-ACK and responds with a ACK packet
   uint32_t exp_recv_len = sizeof(cmu_tcp_header_t);
@@ -257,9 +258,11 @@ void threeWayHandshakeClient(void *in) {
     buf_size = buf_size + n;
   }
   cmu_tcp_header_t *syn_ack_packet = (cmu_tcp_header_t*) packet;
+  printf("Client : received SYN-ACK packet from server\n");
+  print_header(syn_ack_packet);
 
-  sock->window.last_ack_received = syn_ack_packet->ack_num;
-  sock->window.next_seq_expected = syn_ack_packet->seq_num + 1;
+  sock->window.last_ack_received = get_ack(syn_ack_packet);
+  sock->window.next_seq_expected = get_seq(syn_ack_packet) + 1;
 
   src = sock->my_port;
   dst = ntohs(sock->conn.sin_port);
@@ -276,12 +279,13 @@ void threeWayHandshakeClient(void *in) {
 
   uint8_t *ack_packet = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                           ext_len, ext_data, payload, payload_len);
+  printf("Client : sent ACK packet to server\n");
+  print_header((cmu_tcp_header_t*)ack_packet);
 
-  sock->conn_state = ESTABLISHED;
-  
   sendto(sock->socket, ack_packet, plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
   free(packet);
   free(ack_packet);
+  sock->conn_state = ESTABLISHED;
 }
 
 void threeWayHandshakeServer(void *in) {
@@ -290,6 +294,7 @@ void threeWayHandshakeServer(void *in) {
 
   // Step 2 : server receives the SYN, and responds with a SYN-ACK
   // the first message should be a syn packet, get the sender's address from this packet
+  printf("Server : waiting for incoming packet\n");
   assert(sock->conn_state == LISTEN);
 
   uint32_t exp_recv_len = sizeof(cmu_tcp_header_t);
@@ -302,8 +307,10 @@ void threeWayHandshakeServer(void *in) {
     buf_size = buf_size + n;
   }
   cmu_tcp_header_t *syn_packet = (cmu_tcp_header_t*) packet;
+  printf("Server : received SYN packet from client\n");
+  print_header(syn_packet);
 
-  sock->window.next_seq_expected = syn_packet->seq_num + 1;
+  sock->window.next_seq_expected = get_seq(syn_packet) + 1;
 
   uint16_t src = sock->my_port;
   uint16_t dst = ntohs(sock->conn.sin_port);
@@ -320,12 +327,13 @@ void threeWayHandshakeServer(void *in) {
 
   uint8_t *syn_ack_packet = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                           ext_len, ext_data, payload, payload_len);
-
-  sock->conn_state = SYN_RECEIVED;
+  printf("Server : sent SYN-ACK packet to client\n");
+  print_header((cmu_tcp_header_t*)syn_ack_packet);
 
   sendto(sock->socket, syn_ack_packet, plen, 0, (struct sockaddr *)&(sock->conn), conn_len);
   free(packet);
   free(syn_ack_packet);
+  sock->conn_state = SYN_RECEIVED;
 
   // Step 4 : wait ACK from client
   exp_recv_len = sizeof(cmu_tcp_header_t);
@@ -339,13 +347,14 @@ void threeWayHandshakeServer(void *in) {
   }
   // ACK packet from the client
   cmu_tcp_header_t *ack_packet = (cmu_tcp_header_t*) packet;
+  printf("Server : received ACK packet from client\n");
+  print_header(ack_packet);
 
-  sock->window.last_ack_received = ack_packet->ack_num;
-  sock->window.next_seq_expected = ack_packet->seq_num + 1;
-
-  sock->conn_state = ESTABLISHED;
+  sock->window.last_ack_received = get_ack(ack_packet);
+  sock->window.next_seq_expected = get_seq(ack_packet) + 1;
 
   free(packet);
+  sock->conn_state = ESTABLISHED;
 }
 
 void *begin_backend(void *in) {
@@ -356,7 +365,10 @@ void *begin_backend(void *in) {
   // perform 3-way handshake
   if (sock->type == TCP_INITIATOR) {
     // client 
-
+    threeWayHandshakeClient(in);
+  } else {
+    // server
+    threeWayHandshakeServer(in);
   }
 
   while (1) {

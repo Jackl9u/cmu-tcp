@@ -53,6 +53,7 @@ uint8_t get_flags(cmu_tcp_header_t* header);
 uint16_t get_advertised_window(cmu_tcp_header_t* header);
 uint16_t get_extension_length(cmu_tcp_header_t* header);
 uint8_t* get_extension_data(cmu_tcp_header_t* header);
+void print_header(cmu_tcp_header_t* header);
 
 void set_src(cmu_tcp_header_t* header, uint16_t src);
 void set_dst(cmu_tcp_header_t* header, uint16_t dst);
