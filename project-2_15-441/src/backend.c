@@ -221,10 +221,9 @@ void single_send(cmu_socket_t *sock, uint8_t *data, int buf_len) {
 void threeWayHandshakeClient(void *in) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
   socklen_t conn_len = sizeof(sock->conn);
-  
-  // Step 1 : the client sends the SYN packet
   assert(sock->conn_state == CLOSED);
 
+  // Step 1 : the client sends the SYN packet
   uint16_t src = sock->my_port;
   uint16_t dst = ntohs(sock->conn.sin_port);
   uint32_t seq = sock->window.last_ack_received; // this field is used to store a random ISN
@@ -291,12 +290,11 @@ void threeWayHandshakeClient(void *in) {
 void threeWayHandshakeServer(void *in) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
   socklen_t conn_len = sizeof(sock->conn);
-
-  // Step 2 : server receives the SYN, and responds with a SYN-ACK
-  // the first message should be a syn packet, get the sender's address from this packet
-  printf("Server : waiting for incoming packet\n");
   assert(sock->conn_state == LISTEN);
 
+  printf("Server : waiting for incoming packet\n");
+
+  // Step 2 : server receives the SYN, and responds with a SYN-ACK
   uint32_t exp_recv_len = sizeof(cmu_tcp_header_t);
   uint32_t buf_size = 0;
   uint32_t n = 0;
@@ -370,6 +368,7 @@ void *begin_backend(void *in) {
     // server
     threeWayHandshakeServer(in);
   }
+  assert(sock->conn_state == ESTABLISHED);
 
   while (1) {
     while (pthread_mutex_lock(&(sock->death_lock)) != 0) {
