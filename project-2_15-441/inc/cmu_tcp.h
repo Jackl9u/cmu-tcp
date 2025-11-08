@@ -29,7 +29,7 @@
 
 typedef struct {
   uint32_t next_seq_expected;           // same as ACK send to the other party
-  uint32_t last_ack_received;
+  uint32_t last_ack_received;           // next sequence number that I should send
 } window_t;
 
 /**
@@ -61,10 +61,11 @@ typedef enum {
  * you see fit to include any additional state you need for your implementation.
  */
 typedef struct {
-  int socket;
+  int socket;               // bind to "my_addr"
   pthread_t thread_id;
   uint16_t my_port;
-  struct sockaddr_in conn;
+  struct sockaddr_in conn;  // TCP_INITIATOR (client) : the server's ip/port
+                            // TCP_LISTENER (server) : the server's ip/port
   uint8_t* received_buf;
   int received_len;
   pthread_mutex_t recv_lock;

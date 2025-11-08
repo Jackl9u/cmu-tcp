@@ -20,6 +20,7 @@
 #include <string.h>
 #include <sys/socket.h>
 #include <unistd.h>
+#include <time.h>
 
 #include "backend.h"
 
@@ -48,11 +49,11 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   sock->dying = 0;
   pthread_mutex_init(&(sock->death_lock), NULL);
 
-  // FIXME: Sequence numbers should be randomly initialized. The next expected
-  // sequence number should be initialized according to the SYN packet from the
-  // other side of the connection.
-  sock->window.last_ack_received = 0;
-  sock->window.next_seq_expected = 0;
+  sock->state = CLOSED;
+  
+  srand(time(NULL));
+  sock->window.last_ack_received = (uint32_t)rand();    // randomly initialized to be used as ISN
+  sock->window.next_seq_expected = 0;                   // NOT USED; set by the Sequence number of the SYN packet of the other end
 
   if (pthread_cond_init(&sock->wait_cond, NULL) != 0) {
     perror("ERROR condition variable not set\n");
