@@ -28,7 +28,7 @@
 #define EXIT_FAILURE 1
 
 typedef struct {
-  uint32_t next_seq_expected;
+  uint32_t next_seq_expected;           // same as ACK send to the other party
   uint32_t last_ack_received;
 } window_t;
 
@@ -39,6 +39,22 @@ typedef enum {
   TCP_INITIATOR = 0,
   TCP_LISTENER = 1,
 } cmu_socket_type_t;
+
+typedef enum {
+  CLOSED = 0,
+  LISTEN = 1,
+  SYN_RCVD = 2,
+  SYN_SENT = 3,
+  
+  ESTABLISHED = 4,
+
+  FIN_WAIT_1 = 5,
+  FIN_WAIT_2 = 6,
+  CLOSING = 7,
+  TIME_WAIT = 8,
+  CLOSE_WAIT = 9,
+  LAST_ACK = 10,
+} cmu_socket_state_t;
 
 /**
  * This structure holds the state of a socket. You may modify this structure as
@@ -60,6 +76,7 @@ typedef struct {
   int dying;
   pthread_mutex_t death_lock;
   window_t window;
+  cmu_socket_state_t state;
 } cmu_socket_t;
 
 /*
