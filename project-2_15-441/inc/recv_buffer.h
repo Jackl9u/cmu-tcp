@@ -2,6 +2,7 @@
 #define PROJECT_2_15_441_INC_RECV_BUFFER_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct segment_t segment_t;
 

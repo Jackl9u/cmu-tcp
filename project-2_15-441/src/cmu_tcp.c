@@ -54,6 +54,7 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   srand(time(NULL));
   sock->window.last_ack_received = (uint32_t)rand();    // randomly initialized to be used as ISN
   sock->window.next_seq_expected = 0;                   // NOT USED; set by the Sequence number of the SYN packet of the other end
+  sock->window.rcvd_advertised_window = CP1_WINDOW_SIZE;
 
   if (pthread_cond_init(&sock->wait_cond, NULL) != 0) {
     perror("ERROR condition variable not set\n");

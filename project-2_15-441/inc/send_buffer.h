@@ -2,6 +2,7 @@
 #define PROJECT_2_15_441_INC_SEND_BUFFER_H_
 
 #include <stdint.h>
+#include <stdbool.h>
 
 typedef struct {
     uint32_t capacity;

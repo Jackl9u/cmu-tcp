@@ -30,6 +30,7 @@
 typedef struct {
   uint32_t next_seq_expected;           // same as ACK send to the other party
   uint32_t last_ack_received;           // next sequence number that I should send
+  uint16_t rcvd_advertised_window;
 } window_t;
 
 /**
