@@ -42,12 +42,14 @@ long get_time_ms() {
     return tv.tv_sec * 1000 + tv.tv_usec / 1000;
 }
 
-void handle_message(void *, uint8_t*) {
+void handle_message(void *in, uint8_t* pkt) {
+  cmu_socket_t *sock = (cmu_socket_t *)in;
 
 }
 
 int counter1 = 0;
 int counter2 = 0;
+int counter3 = 0;
 
 void init_handshake_client(void *in) {
   printf("client start handshake\n");
@@ -101,11 +103,9 @@ void init_handshake_client(void *in) {
     } else {
       cmu_tcp_header_t hdr;
       ssize_t len = recvfrom(sock->socket, &hdr, sizeof(cmu_tcp_header_t),
-                     MSG_DONTWAIT | MSG_PEEK, (struct sockaddr *)&(sock->conn),
+                     MSG_PEEK, (struct sockaddr *)&(sock->conn),
                      &conn_len);
-      printf("client 1\n");
       if (len == sizeof(cmu_tcp_header_t)) {
-        printf("client 2\n");
         len = recvfrom(sock->socket, &hdr, sizeof(cmu_tcp_header_t), 0,
                    (struct sockaddr *)&(sock->conn), &conn_len);
         assert(len == sizeof(cmu_tcp_header_t));
@@ -138,7 +138,7 @@ void init_handshake_client(void *in) {
             create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                           ext_len, ext_data, payload, payload_len);
 
-        if (counter2 >= 0) {
+        if (counter2 >= 2) {
           sendto(sock->socket, packet, plen, 0,
                 (struct sockaddr *)&(sock->conn), conn_len);
         } else {
@@ -155,8 +155,6 @@ void init_handshake_client(void *in) {
   }
   printf("client finished handshake\n");
 }
-
-int counter3 = 0;
 
 void init_handshake_server(void *in) {
   printf("server start handshake\n");
