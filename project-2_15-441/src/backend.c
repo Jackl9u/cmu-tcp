@@ -44,6 +44,13 @@ long get_time_ms() {
 
 void handle_message(void *in, uint8_t* pkt) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
+  socklen_t conn_len = sizeof(sock->conn);
+  cmu_tcp_header_t* hdr = (cmu_tcp_header_t*)pkt;
+
+  // require all packets to carry ACK number
+  assert(get_flags(hdr) & ACK_FLAG_MASK);
+
+  
 
 }
 

@@ -134,53 +134,53 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
 //   return close(sock->socket);
 // }
 
-// int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
-//   uint8_t *new_buf;
-//   int read_len = 0;
+int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
+  uint8_t *new_buf;
+  int read_len = 0;
 
-//   if (length < 0) {
-//     perror("ERROR negative length");
-//     return EXIT_ERROR;
-//   }
+  if (length < 0) {
+    perror("ERROR negative length");
+    return EXIT_ERROR;
+  }
 
-//   while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
-//   }
+  while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+  }
 
-//   switch (flags) {
-//     case NO_FLAG:
-//       while (sock->received_len == 0) {
-//         pthread_cond_wait(&(sock->wait_cond), &(sock->recv_lock));
-//       }
-//     // Fall through.
-//     case NO_WAIT:
-//       if (sock->received_len > 0) {
-//         if (sock->received_len > length)
-//           read_len = length;
-//         else
-//           read_len = sock->received_len;
+  switch (flags) {
+    case NO_FLAG:
+      while (sock->received_len == 0) {
+        pthread_cond_wait(&(sock->wait_cond), &(sock->recv_lock));
+      }
+    // Fall through.
+    case NO_WAIT:
+      if (sock->received_len > 0) {
+        if (sock->received_len > length)
+          read_len = length;
+        else
+          read_len = sock->received_len;
 
-//         memcpy(buf, sock->received_buf, read_len);
-//         if (read_len < sock->received_len) {
-//           new_buf = malloc(sock->received_len - read_len);
-//           memcpy(new_buf, sock->received_buf + read_len,
-//                  sock->received_len - read_len);
-//           free(sock->received_buf);
-//           sock->received_len -= read_len;
-//           sock->received_buf = new_buf;
-//         } else {
-//           free(sock->received_buf);
-//           sock->received_buf = NULL;
-//           sock->received_len = 0;
-//         }
-//       }
-//       break;
-//     default:
-//       perror("ERROR Unknown flag.\n");
-//       read_len = EXIT_ERROR;
-//   }
-//   pthread_mutex_unlock(&(sock->recv_lock));
-//   return read_len;
-// }
+        memcpy(buf, sock->received_buf, read_len);
+        if (read_len < sock->received_len) {
+          new_buf = malloc(sock->received_len - read_len);
+          memcpy(new_buf, sock->received_buf + read_len,
+                 sock->received_len - read_len);
+          free(sock->received_buf);
+          sock->received_len -= read_len;
+          sock->received_buf = new_buf;
+        } else {
+          free(sock->received_buf);
+          sock->received_buf = NULL;
+          sock->received_len = 0;
+        }
+      }
+      break;
+    default:
+      perror("ERROR Unknown flag.\n");
+      read_len = EXIT_ERROR;
+  }
+  pthread_mutex_unlock(&(sock->recv_lock));
+  return read_len;
+}
 
 // int cmu_write(cmu_socket_t *sock, const void *buf, int length) {
 //   while (pthread_mutex_lock(&(sock->send_lock)) != 0) {

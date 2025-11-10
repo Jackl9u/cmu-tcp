@@ -17,9 +17,9 @@ typedef struct {
 typedef struct {
     uint32_t capacity;
     uint32_t last_byte_read_seqnum;
-    uint32_t last_byte_read_index;
-    uint32_t next_byte_expected_index;
-    uint32_t last_byte_rcvd_index;
+    int last_byte_read_index;       // the index of the buffer array, on which the byte was the last one read/consumed
+    int next_byte_expected_index;   // the index of the buffer array to put the next in-order byte
+    int last_byte_rcvd_index;       // the index of the buffer array, on which the furthest byte is on
     uint8_t* buffer;
     segment_t* out_of_order_segments;   // sort in order
 } recv_buffer_t;
@@ -31,7 +31,11 @@ recv_buffer_t* recv_buffer_create(uint32_t capacity);
 uint32_t recv_buffer_max_read(recv_buffer_t* recv_buffer);
 
 // read len bytes from the buffer starting at last_byte_read_index + 1
-void recv_buffer_read(recv_buffer_t* recv_buffer, uint32_t len);
+void recv_buffer_read(recv_buffer_t* recv_buffer, uint8_t* buf, uint32_t len);
+
+// return the maximum number of bytes from the next_expected_seq_num (ack to the other party)
+// that this buffer can hold. out-of-order bytes are overwritten since they are not covered by ack
+uint32_t recv_buffer_max_receive(recv_buffer_t* recv_buffer);
 
 // is the buffer able to receive 'len' bytes of data starting at 'seqnum'
 bool recv_buffer_can_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t len);
