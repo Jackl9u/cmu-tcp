@@ -18,35 +18,35 @@
 
 #include "cmu_tcp.h"
 
-void functionality(cmu_socket_t *sock) {
-  uint8_t buf[9898];
-  int read;
-  FILE *fp;
+// void functionality(cmu_socket_t *sock) {
+//   uint8_t buf[9898];
+//   int read;
+//   FILE *fp;
 
-  cmu_write(sock, "hi there", 8);
-  cmu_write(sock, " https://www.youtube.com/watch?v=dQw4w9WgXcQ", 44);
-  cmu_write(sock, " https://www.youtube.com/watch?v=Yb6dZ1IFlKc", 44);
-  cmu_write(sock, " https://www.youtube.com/watch?v=xvFZjo5PgG0", 44);
-  cmu_write(sock, " https://www.youtube.com/watch?v=8ybW48rKBME", 44);
-  cmu_write(sock, " https://www.youtube.com/watch?v=xfr64zoBTAQ", 45);
-  cmu_read(sock, buf, 200, NO_FLAG);
+//   cmu_write(sock, "hi there", 8);
+//   cmu_write(sock, " https://www.youtube.com/watch?v=dQw4w9WgXcQ", 44);
+//   cmu_write(sock, " https://www.youtube.com/watch?v=Yb6dZ1IFlKc", 44);
+//   cmu_write(sock, " https://www.youtube.com/watch?v=xvFZjo5PgG0", 44);
+//   cmu_write(sock, " https://www.youtube.com/watch?v=8ybW48rKBME", 44);
+//   cmu_write(sock, " https://www.youtube.com/watch?v=xfr64zoBTAQ", 45);
+//   cmu_read(sock, buf, 200, NO_FLAG);
 
-  cmu_write(sock, "hi there", 9);
-  cmu_read(sock, buf, 200, NO_FLAG);
-  printf("R: %s\n", buf);
+//   cmu_write(sock, "hi there", 9);
+//   cmu_read(sock, buf, 200, NO_FLAG);
+//   printf("R: %s\n", buf);
 
-  read = cmu_read(sock, buf, 200, NO_WAIT);
-  printf("Read: %d\n", read);
+//   read = cmu_read(sock, buf, 200, NO_WAIT);
+//   printf("Read: %d\n", read);
 
-  fp = fopen("/vagrant/project-2_15-441/src/cmu_tcp.c", "rb");
-  read = 1;
-  while (read > 0) {
-    read = fread(buf, 1, 2000, fp);
-    if (read > 0) {
-      cmu_write(sock, buf, read);
-    }
-  }
-}
+//   fp = fopen("/vagrant/project-2_15-441/src/cmu_tcp.c", "rb");
+//   read = 1;
+//   while (read > 0) {
+//     read = fread(buf, 1, 2000, fp);
+//     if (read > 0) {
+//       cmu_write(sock, buf, read);
+//     }
+//   }
+// }
 
 int main() {
   int portno;
@@ -69,11 +69,15 @@ int main() {
     exit(EXIT_FAILURE);
   }
 
-  functionality(&socket);
-
-  if (cmu_close(&socket) < 0) {
-    exit(EXIT_FAILURE);
+  while (true) {
+    
   }
+
+  // functionality(&socket);
+
+  // if (cmu_close(&socket) < 0) {
+  //   exit(EXIT_FAILURE);
+  // }
 
   return EXIT_SUCCESS;
 }

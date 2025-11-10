@@ -4,7 +4,7 @@
 #include <stdint.h>
 #include <stdbool.h>
 
-typedef struct segment_t segment_t;
+// typedef struct segment_t segment_t;
 
 // a data segment on the buffer
 typedef struct {  

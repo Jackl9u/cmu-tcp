@@ -25,6 +25,9 @@ void send_buffer_write(send_buffer_t* send_buffer, uint8_t* data, uint32_t len);
 // but ack_num - 1
 void send_buffer_ack(send_buffer_t* send_buffer, uint32_t seq_num);
 
+// return the maximum number of bytes that can be send (last_byte_written_index - last_byte_acked_index)
+uint32_t send_buffer_max_send(send_buffer_t* send_buffer);
+
 // send 'len' bytes starting from last_byte_sent_index
 void send_buffer_send(send_buffer_t* send_buffer, uint32_t len);
 

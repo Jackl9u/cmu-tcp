@@ -23,6 +23,9 @@
 #include "cmu_packet.h"
 #include "grading.h"
 
+#include "send_buffer.h"
+#include "recv_buffer.h"
+
 #define EXIT_SUCCESS 0
 #define EXIT_ERROR -1
 #define EXIT_FAILURE 1
@@ -64,21 +67,22 @@ typedef enum {
 typedef struct {
   int socket;               // bind to "my_addr"
   pthread_t thread_id;
+  cmu_socket_type_t type;
   uint16_t my_port;
   struct sockaddr_in conn;  // TCP_INITIATOR (client) : the server's ip/port
-                            // TCP_LISTENER (server) : the server's ip/port
-  uint8_t* received_buf;
-  int received_len;
+                            // TCP_LISTENER (server) : the client's ip/port, upon receiving the first packet
+  
+  recv_buffer_t* recv_buf;
   pthread_mutex_t recv_lock;
-  pthread_cond_t wait_cond;
-  uint8_t* sending_buf;
-  int sending_len;
-  cmu_socket_type_t type;
+  send_buffer_t* send_buf;
   pthread_mutex_t send_lock;
   int dying;
   pthread_mutex_t death_lock;
+  pthread_cond_t wait_cond;
+  
   window_t window;
   cmu_socket_state_t state;
+  long last_send_ms;
 } cmu_socket_t;
 
 /*
@@ -136,7 +140,7 @@ int cmu_close(cmu_socket_t* sock);
  * @return The number of bytes read on success, -1 on error.
  */
 int cmu_read(cmu_socket_t* sock, void* buf, const int length,
-             cmu_read_mode_t flags);
+            cmu_read_mode_t flags);
 
 /**
  * Writes data to a CMU-TCP socket.
