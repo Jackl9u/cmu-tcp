@@ -26,22 +26,27 @@ typedef struct {
 
 recv_buffer_t* recv_buffer_create(uint32_t capacity);
 
+void recv_buffer_initialize(recv_buffer_t* recv_buffer, uint32_t isn);
+
 // return the maximum amout of data that can be read from this buffer
 // we cannot read the out-of-order packets
 uint32_t recv_buffer_max_read(recv_buffer_t* recv_buffer);
-
-// read len bytes from the buffer starting at last_byte_read_index + 1
-void recv_buffer_read(recv_buffer_t* recv_buffer, uint8_t* buf, uint32_t len);
 
 // return the maximum number of bytes from the next_expected_seq_num (ack to the other party)
 // that this buffer can hold. out-of-order bytes are overwritten since they are not covered by ack
 uint32_t recv_buffer_max_receive(recv_buffer_t* recv_buffer);
 
-// is the buffer able to receive 'len' bytes of data starting at 'seqnum'
+// read len bytes from the buffer starting at last_byte_read_index + 1
+void recv_buffer_read(recv_buffer_t* recv_buffer, uint8_t* buf, uint32_t len);
+
+// 0 : can receive
+// 1 : don't receive : too long
+// 2 : don't receive : seqnum <= last_byte_read_seqnum (already read/processed)
+// 3 : don't receive : the packet was already successfully received
 uint8_t recv_buffer_can_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t len);
 
 // receive 'len' bytes of data starting at 'seqnum'
 // also update out_of_order_segments
-void recv_buffer_receive(recv_buffer_t* recv_buffer, void *in);
+void recv_buffer_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t len, uint8_t* data);
 
 #endif  // PROJECT_2_15_441_INC_RECV_BUFFER_H_
