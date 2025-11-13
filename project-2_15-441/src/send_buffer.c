@@ -90,6 +90,9 @@ uint32_t send_buffer_max_dump(send_buffer_t* send_buffer) {
 
 void send_buffer_write(send_buffer_t* send_buffer, uint8_t* buf, uint32_t len) {
     assert(len <= send_buffer_max_write(send_buffer));
+    if (len == 0) {
+        return;
+    }
 
     // copy data to buffer
     safe_memcpy_to_sendbuf(send_buffer, len, buf);
@@ -109,5 +112,5 @@ void send_buffer_dump(send_buffer_t* send_buffer, uint32_t len, uint8_t* data) {
     safe_memcpy_from_sendbuf(send_buffer, len, data);
 
     // update internal states
-    send_buffer->last_byte_sent_index = seqnum_to_index_send(send_buffer, send_buffer->last_byte_acked_index + len);
+    send_buffer->last_byte_sent_index = seqnum_to_index_send(send_buffer, send_buffer->last_byte_acked_seqnum + len);
 }
