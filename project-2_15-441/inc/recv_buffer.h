@@ -17,8 +17,8 @@ typedef struct segment_t {
 typedef struct {
     uint32_t capacity;
     uint32_t last_byte_read_seqnum;
-    int last_byte_read_index;       // the index of the buffer array, on which the byte was the last one read/consumed
-    int next_byte_expected_index;   // the index of the buffer array to put the next in-order byte
+    uint32_t last_byte_read_index;       // the index of the buffer array, on which the byte was the last one read/consumed
+    uint32_t next_byte_expected_index;   // the index of the buffer array to put the next in-order byte
     uint8_t* buffer;
     segment_t* start;
     segment_t* end;

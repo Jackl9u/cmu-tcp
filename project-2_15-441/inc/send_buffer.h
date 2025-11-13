@@ -9,12 +9,22 @@ typedef struct {
     uint32_t last_byte_acked_seqnum;
     uint32_t last_byte_acked_index;       // the index of the last byte that is received by the other side; i.e. ackNum_from_receiver - 1
     uint32_t last_byte_sent_index;        // the index of the last byte that is sent (not yet acked)
-    uint32_t last_byte_written_index;     // the index of the last byte that is written by the application
+    uint32_t next_byte_written_index;     // the index of the buffer to write the next byte from application
     uint8_t* buffer;
 } send_buffer_t;
 
-// create a send_buffer with specified capacity
 send_buffer_t* send_buffer_create(uint32_t capacity);
+
+void send_buffer_initialize(send_buffer_t* send_buffer, uint32_t isn);
+
+uint32_t send_buffer_max_write(send_buffer_t* send_buffer);
+
+// return the maximum number of bytes that can be send (last_byte_written_index - last_byte_acked_index)
+uint32_t send_buffer_max_send(send_buffer_t* send_buffer);
+
+
+
+
 
 // is it possible to write 'len' more bytes to the buffer?
 bool send_buffer_can_write(send_buffer_t* send_buffer, uint32_t len);
@@ -24,9 +34,6 @@ void send_buffer_write(send_buffer_t* send_buffer, uint8_t* data, uint32_t len);
 // seq_num : the sequence num that is actually received and acked, not the raw ack_num in tcp header,
 // but ack_num - 1
 void send_buffer_ack(send_buffer_t* send_buffer, uint32_t seq_num);
-
-// return the maximum number of bytes that can be send (last_byte_written_index - last_byte_acked_index)
-uint32_t send_buffer_max_send(send_buffer_t* send_buffer);
 
 // send 'len' bytes starting from last_byte_sent_index
 void send_buffer_send(send_buffer_t* send_buffer, uint32_t len);
