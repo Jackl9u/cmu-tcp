@@ -23,6 +23,8 @@
 #include <time.h>
 
 #include "backend.h"
+#include "recv_buffer.h"
+#include "send_buffer.h"
 
 uint32_t DEFAULT_BUFF_SIZE = 1024;
 
@@ -41,12 +43,6 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   sock->socket = sockfd;
   sock->type = socket_type;
 
-  // sock->recv_buf = recv_buffer_create(DEFAULT_BUFF_SIZE);
-  pthread_mutex_init(&(sock->recv_lock), NULL);
-
-  // sock->send_buf = send_buffer_create(DEFAULT_BUFF_SIZE);
-  pthread_mutex_init(&(sock->send_lock), NULL);
-
   sock->dying = 0;
   pthread_mutex_init(&(sock->death_lock), NULL);
 
@@ -59,6 +55,15 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   sock->window.last_ack_received = (uint32_t)rand();    // randomly initialized to be used as ISN
   sock->window.next_seq_expected = 0;                   // NOT USED; set by the Sequence number of the SYN packet of the other end
   sock->window.rcvd_advertised_window = CP1_WINDOW_SIZE;
+
+  sock->recv_buf = recv_buffer_create(DEFAULT_BUFF_SIZE);
+  // receive buffer needs to be initialize during the handshake SYN
+  // recv_buffer_initialize( .. );
+  pthread_mutex_init(&(sock->recv_lock), NULL);
+
+  sock->send_buf = send_buffer_create(DEFAULT_BUFF_SIZE);
+  send_buffer_initialize(sock->send_buf, sock->window.last_ack_received);
+  pthread_mutex_init(&(sock->send_lock), NULL);
 
   sock->state = CLOSED;
   sock->last_send_ms = 0;
@@ -112,27 +117,26 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   return EXIT_SUCCESS;
 }
 
-// int cmu_close(cmu_socket_t *sock) {
-//   while (pthread_mutex_lock(&(sock->death_lock)) != 0) {
-//   }
-//   sock->dying = 1;
-//   pthread_mutex_unlock(&(sock->death_lock));
+int cmu_close(cmu_socket_t *sock) {
+  while (pthread_mutex_lock(&(sock->death_lock)) != 0) {
+  }
+  sock->dying = 1;
+  pthread_mutex_unlock(&(sock->death_lock));
 
-//   pthread_join(sock->thread_id, NULL);
+  pthread_join(sock->thread_id, NULL);
 
-//   if (sock != NULL) {
-//     if (sock->received_buf != NULL) {
-//       free(sock->received_buf);
-//     }
-//     if (sock->sending_buf != NULL) {
-//       free(sock->sending_buf);
-//     }
-//   } else {
-//     perror("ERROR null socket\n");
-//     return EXIT_ERROR;
-//   }
-//   return close(sock->socket);
-// }
+  // after the pthread_join(sock->thread_id, NULL);
+  // there's only one thread accessing recv_buf and send_buf
+  // so no lock needed
+  if (sock != NULL) {
+    recv_buffer_clean(sock->recv_buf);
+    send_buffer_clean(sock->send_buf);
+  } else {
+    perror("ERROR null socket\n");
+    return EXIT_ERROR;
+  }
+  return close(sock->socket);
+}
 
 int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
   uint8_t *new_buf;
@@ -148,30 +152,18 @@ int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
 
   switch (flags) {
     case NO_FLAG:
-      while (sock->received_len == 0) {
+      while (recv_buffer_max_read(sock->recv_buf) == 0) {
         pthread_cond_wait(&(sock->wait_cond), &(sock->recv_lock));
       }
     // Fall through.
     case NO_WAIT:
-      if (sock->received_len > 0) {
-        if (sock->received_len > length)
+      if (recv_buffer_max_read(sock->recv_buf) > 0) {
+        if (recv_buffer_max_read(sock->recv_buf) > length) {
           read_len = length;
-        else
-          read_len = sock->received_len;
-
-        memcpy(buf, sock->received_buf, read_len);
-        if (read_len < sock->received_len) {
-          new_buf = malloc(sock->received_len - read_len);
-          memcpy(new_buf, sock->received_buf + read_len,
-                 sock->received_len - read_len);
-          free(sock->received_buf);
-          sock->received_len -= read_len;
-          sock->received_buf = new_buf;
         } else {
-          free(sock->received_buf);
-          sock->received_buf = NULL;
-          sock->received_len = 0;
+          read_len = recv_buffer_max_read(sock->recv_buf);
         }
+        recv_buffer_read(sock->recv_buf, buf, read_len);
       }
       break;
     default:
@@ -182,29 +174,27 @@ int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
   return read_len;
 }
 
-// int cmu_write(cmu_socket_t *sock, const void *buf, int length) {
-//   while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
-//   }
-//   if (sock->sending_buf == NULL)
-//     sock->sending_buf = malloc(length);
-//   else
-//     sock->sending_buf = realloc(sock->sending_buf, length + sock->sending_len);
-//   memcpy(sock->sending_buf + sock->sending_len, buf, length);
-//   sock->sending_len += length;
+int cmu_write(cmu_socket_t *sock, const void *buf, int length) {
+  uint32_t written = 0;
 
-//   pthread_mutex_unlock(&(sock->send_lock));
-//   return EXIT_SUCCESS;
-// }
+  while (length > 0) {
+    while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
+    }
+    
+    uint32_t write_len;
+    if (length > send_buffer_max_write(sock->send_buf)) {
+      write_len = send_buffer_max_write(sock->send_buf);
+    } else {
+      write_len = length;
+    }
+    if (write_len > 0) {
+      send_buffer_write(sock->send_buf, buf+written, write_len);
+      written += write_len;
+      length -= write_len;
+    }
 
+    pthread_mutex_unlock(&(sock->send_lock));
+  }
 
-int cmu_close(cmu_socket_t*) {
-  return 0;
-}
-
-int cmu_read(cmu_socket_t *, void *, int , cmu_read_mode_t) {
-  return 0;
-}
-
-int cmu_write(cmu_socket_t *, const void *, int ) {
-  return 0;
+  return EXIT_SUCCESS;
 }

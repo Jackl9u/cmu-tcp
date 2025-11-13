@@ -165,6 +165,23 @@ segment_t* segment_merge(segment_t* start, segment_t* end, uint32_t seg_start_se
     return seg;
 }
 
+void segment_clean(segment_t* start, segment_t* end) {
+    if (start == NULL || end == NULL) {
+        return;
+    }
+
+    if (start == end) {
+        free(start);
+        return;
+    }
+
+    while (start != end) {
+        start = start->next;
+        free(start->prev);
+    }
+    free(start);
+}
+
 /* ********************************** */
 /* *********** Interface *********** */
 /* ********************************** */
@@ -179,9 +196,9 @@ recv_buffer_t* recv_buffer_create(uint32_t capacity) {
     return recv_buf;
 }
 
-void recv_buffer_initialize(recv_buffer_t* recv_buffer, uint32_t isn) {
+void recv_buffer_initialize(recv_buffer_t* recv_buffer, uint32_t other_isn) {
     assert(recv_buffer->last_byte_read_seqnum == 0);
-    recv_buffer->last_byte_read_seqnum = isn;
+    recv_buffer->last_byte_read_seqnum = other_isn;
     recv_buffer->last_byte_read_index = 0;
     recv_buffer->next_byte_expected_index = 1;
 }
@@ -280,4 +297,10 @@ void recv_buffer_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t l
 
     uint32_t start_index = seqnum_to_index_recv(recv_buffer, seqnum);
     safe_memcpy_to_recvbuf(recv_buffer, start_index, len, data);    
+}
+
+void recv_buffer_clean(recv_buffer_t* recv_buffer) {
+    free(recv_buffer->buffer);
+    segment_clean(recv_buffer->start, recv_buffer->end);
+    free(recv_buffer);
 }

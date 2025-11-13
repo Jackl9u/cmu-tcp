@@ -29,4 +29,7 @@ void send_buffer_write(send_buffer_t* send_buffer, uint8_t* buf, uint32_t len);
 // dump 'len' bytes starting from 'last_byte_acked_index' into 'data' for sendto()
 void send_buffer_dump(send_buffer_t* send_buffer, uint32_t len, uint8_t* data);
 
+// free the resources
+void send_buffer_clean(send_buffer_t* send_buffer);
+
 #endif  // PROJECT_2_15_441_INC_SEND_BUFFER_H_

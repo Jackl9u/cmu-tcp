@@ -1,5 +1,6 @@
 #include <stddef.h>
 #include <stdlib.h>
+#include <string.h>
 #include <assert.h>
 
 #include "send_buffer.h"
@@ -113,4 +114,9 @@ void send_buffer_dump(send_buffer_t* send_buffer, uint32_t len, uint8_t* data) {
 
     // update internal states
     send_buffer->last_byte_sent_index = seqnum_to_index_send(send_buffer, send_buffer->last_byte_acked_seqnum + len);
+}
+
+void send_buffer_clean(send_buffer_t* send_buffer) {
+    free(send_buffer->buffer);
+    free(send_buffer);
 }

@@ -26,7 +26,7 @@ typedef struct {
 
 recv_buffer_t* recv_buffer_create(uint32_t capacity);
 
-void recv_buffer_initialize(recv_buffer_t* recv_buffer, uint32_t isn);
+void recv_buffer_initialize(recv_buffer_t* recv_buffer, uint32_t other_isn);
 
 // return the maximum amout of data that can be read from this buffer
 // we cannot read the out-of-order packets
@@ -48,5 +48,8 @@ uint8_t recv_buffer_can_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uin
 // receive 'len' bytes of data starting at 'seqnum'
 // also update out_of_order_segments
 void recv_buffer_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t len, uint8_t* data);
+
+// free the resources
+void recv_buffer_clean(recv_buffer_t* recv_buffer);
 
 #endif  // PROJECT_2_15_441_INC_RECV_BUFFER_H_
