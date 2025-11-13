@@ -4,7 +4,6 @@
 #include <assert.h>
 
 #include "recv_buffer.h"
-#include "cmu_tcp.h"
 
 /* min / max */
 
@@ -26,7 +25,7 @@ uint32_t max(uint32_t a, uint32_t b) {
 
 /* seqnum and index */
 
-uint32_t seqnum_to_index(recv_buffer_t* recv_buffer, uint32_t seqnum) {
+uint32_t seqnum_to_index_recv(recv_buffer_t* recv_buffer, uint32_t seqnum) {
     assert(seqnum >= recv_buffer->last_byte_read_seqnum);
     assert(seqnum < recv_buffer->last_byte_read_seqnum + recv_buffer->capacity);
     return (recv_buffer->last_byte_read_index + (seqnum - recv_buffer->last_byte_read_seqnum)) % recv_buffer->capacity;
@@ -51,7 +50,7 @@ uint32_t get_next_byte_expected_seqnum(recv_buffer_t* recv_buffer) {
 /* memcpy */
 
 void safe_memcpy_to_recvbuf(recv_buffer_t* recv_buffer, uint32_t start_index, uint32_t len, uint8_t* data) {
-    if (start_index + len -1 < recv_buffer->capacity-1) {
+    if (start_index + len -1 <= recv_buffer->capacity-1) {
         // can directly copy
         memcpy(recv_buffer->buffer+start_index, data, len);
     } else {
@@ -64,7 +63,7 @@ void safe_memcpy_to_recvbuf(recv_buffer_t* recv_buffer, uint32_t start_index, ui
 
 void safe_memcpy_from_recvbuf(recv_buffer_t* recv_buffer, uint32_t len, uint8_t* data) {
     uint32_t end_seq = recv_buffer->last_byte_read_seqnum + len;
-    uint32_t end_index = seqnum_to_index(recv_buffer, end_seq);
+    uint32_t end_index = seqnum_to_index_recv(recv_buffer, end_seq);
     if (end_index > recv_buffer->last_byte_read_index) {
         // no wrap around
         memcpy(data, recv_buffer->buffer + recv_buffer->last_byte_read_index+1, len);
@@ -237,15 +236,15 @@ void recv_buffer_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t l
     if (seqnum <= next_expected_seq && recv_buffer->start == NULL) {
         // inorder data, no segmention existed
         // directly write into the buffer 
-        uint32_t start_index = seqnum_to_index(recv_buffer, seqnum);
+        uint32_t start_index = seqnum_to_index_recv(recv_buffer, seqnum);
         safe_memcpy_to_recvbuf(recv_buffer, start_index, len, data);
-        recv_buffer->next_byte_expected_index = seqnum_to_index(recv_buffer, seqnum+len);
+        recv_buffer->next_byte_expected_index = seqnum_to_index_recv(recv_buffer, seqnum+len);
         return;
     }
 
     if (recv_buffer->start == NULL) {
         // no segmention existed, but out-of-order data
-        uint32_t start_index = seqnum_to_index(recv_buffer, seqnum);
+        uint32_t start_index = seqnum_to_index_recv(recv_buffer, seqnum);
         safe_memcpy_to_recvbuf(recv_buffer, start_index, len, data);
 
         segment_t* seg = malloc(sizeof(segment_t));
@@ -260,7 +259,7 @@ void recv_buffer_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t l
     segment_t* seg = segment_merge(recv_buffer->start, recv_buffer->end, seqnum, seqnum + len - 1);
     if (seg->start_seqnum_inclusive <= next_expected_seq) {
         // the merged block can be further merged with the existing in-order data
-        recv_buffer->next_byte_expected_index = seqnum_to_index(recv_buffer, seg->end_seqnum_inclusive+1);
+        recv_buffer->next_byte_expected_index = seqnum_to_index_recv(recv_buffer, seg->end_seqnum_inclusive+1);
         if (seg->prev == NULL) {
             recv_buffer->start = seg->next;
         }
@@ -279,6 +278,6 @@ void recv_buffer_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t l
         }
     }
 
-    uint32_t start_index = seqnum_to_index(recv_buffer, seqnum);
+    uint32_t start_index = seqnum_to_index_recv(recv_buffer, seqnum);
     safe_memcpy_to_recvbuf(recv_buffer, start_index, len, data);    
 }
