@@ -81,8 +81,10 @@ void handle_message(void *in, uint8_t* pkt) {
       // after receiving it and update the internal recv_buffer, then send an ACK back
       while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
       }
-      if (recv_buffer_can_receive(sock->recv_buf, seqnum, payload_len)) {
+      if (recv_buffer_can_receive(sock->recv_buf, seqnum, payload_len) == 0) {
         recv_buffer_receive(sock->recv_buf, seqnum, payload_len, get_payload(pkt));
+        pthread_cond_signal(&(sock->wait_cond));
+        printf("notified\n");
       }
       sock->window.next_seq_expected = get_next_byte_expected_seqnum(sock->recv_buf);
       pthread_mutex_unlock(&(sock->recv_lock));
@@ -119,6 +121,10 @@ int counter1 = 0;
 int counter2 = 0;
 int counter3 = 0;
 
+int counter1_lim = 0;
+int counter2_lim = 0;
+int counter3_lim = 0;
+
 void init_handshake_client(void *in) {
   printf("client start handshake\n");
   cmu_socket_t *sock = (cmu_socket_t *)in;
@@ -144,7 +150,7 @@ void init_handshake_client(void *in) {
 
   socklen_t conn_len = sizeof(sock->conn);
 
-  if (counter1 >= 3) {
+  if (counter1 >= counter1_lim) {
     sendto(sock->socket, packet, plen, 0,
           (struct sockaddr *)&(sock->conn), conn_len);
   } else {
@@ -162,7 +168,7 @@ void init_handshake_client(void *in) {
     if (poll(&ack_fd, 1, DEFAULT_TIMEOUT) <= 0) {
       // reached timeout and still don't have ack, resend the packet
       printf("re-send message\n");
-      if (counter1 >= 3) {
+      if (counter1 >= counter1_lim) {
         sendto(sock->socket, packet, plen, 0,
               (struct sockaddr *)&(sock->conn), conn_len);
       } else {
@@ -186,7 +192,7 @@ void init_handshake_client(void *in) {
         // use the ISN to initialize the receive_buffer
         while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
         }
-        send_buffer_initialize(sock->send_buf, get_seq(&hdr));
+        recv_buffer_initialize(sock->recv_buf, get_seq(&hdr));
         pthread_mutex_unlock(&(sock->recv_lock));
         
         assert(get_ack(&hdr) == sock->window.last_ack_received + 1);
@@ -213,7 +219,7 @@ void init_handshake_client(void *in) {
             create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                           ext_len, ext_data, payload, payload_len);
 
-        if (counter2 >= 2) {
+        if (counter2 >= counter2_lim) {
           sendto(sock->socket, packet, plen, 0,
                 (struct sockaddr *)&(sock->conn), conn_len);
         } else {
@@ -228,6 +234,8 @@ void init_handshake_client(void *in) {
       }
     }
   }
+
+  sock->initialized = true;
   printf("client finished handshake\n");
 }
 
@@ -270,8 +278,9 @@ void init_handshake_server(void *in) {
       // use the ISN to initialize the receive_buffer
       while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
       }
-      send_buffer_initialize(sock->send_buf, get_seq(&hdr));
+      recv_buffer_initialize(sock->recv_buf, get_seq(&hdr));
       pthread_mutex_unlock(&(sock->recv_lock));
+      sock->initialized = true;
 
       sock->window.next_seq_expected = get_seq(&hdr) + 1;
 
@@ -292,7 +301,7 @@ void init_handshake_server(void *in) {
       packet = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
                     ext_len, ext_data, payload, payload_len);
 
-      if (counter3 >= 3) {
+      if (counter3 >= counter3_lim) {
         sendto(sock->socket, packet, plen, 0,
           (struct sockaddr *)&(sock->conn), conn_len);
       } else {
@@ -330,7 +339,7 @@ void init_handshake_server(void *in) {
         } else {
           // the SYN-ACK was not received by the client, so client repeatly send SYN packet
           assert(get_flags(&hdr) & SYN_FLAG_MASK);
-          if (counter3 >= 3) {
+          if (counter3 >= counter3_lim) {
             sendto(sock->socket, packet, plen, 0,
               (struct sockaddr *)&(sock->conn), conn_len);
           } else {
@@ -525,6 +534,7 @@ void *begin_backend(void *in) {
   }
 
   while (1) {
+    // printf("start the while loop\n");
     while (pthread_mutex_lock(&(sock->death_lock)) != 0) {
     }
     death = sock->dying;

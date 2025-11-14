@@ -82,6 +82,7 @@ typedef struct {
   
   window_t window;
   cmu_socket_state_t state;
+  bool initialized;
   long last_send_ms;
 } cmu_socket_t;
 

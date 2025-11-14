@@ -71,10 +71,6 @@ int main() {
     exit(EXIT_FAILURE);
   }
 
-  while (true) {
-    
-  }
-
   functionality(&socket);
 
   if (cmu_close(&socket) < 0) {

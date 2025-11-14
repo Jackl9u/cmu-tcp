@@ -2,6 +2,7 @@
 #include <stdlib.h>
 #include <string.h>
 #include <assert.h>
+#include <stdio.h>
 
 #include "recv_buffer.h"
 
@@ -197,6 +198,7 @@ recv_buffer_t* recv_buffer_create(uint32_t capacity) {
 }
 
 void recv_buffer_initialize(recv_buffer_t* recv_buffer, uint32_t other_isn) {
+    printf("recv_buffer->last_byte_read_seqnum : %d\n", recv_buffer->last_byte_read_seqnum);
     assert(recv_buffer->last_byte_read_seqnum == 0);
     recv_buffer->last_byte_read_seqnum = other_isn;
     recv_buffer->last_byte_read_index = 0;

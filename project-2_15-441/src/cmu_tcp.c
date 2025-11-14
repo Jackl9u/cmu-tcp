@@ -66,6 +66,7 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
   pthread_mutex_init(&(sock->send_lock), NULL);
 
   sock->state = CLOSED;
+  sock->initialized = false;
   sock->last_send_ms = 0;
 
   switch (socket_type) {
@@ -118,6 +119,8 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
 }
 
 int cmu_close(cmu_socket_t *sock) {
+  while (!sock->initialized) {}
+  
   while (pthread_mutex_lock(&(sock->death_lock)) != 0) {
   }
   sock->dying = 1;
@@ -139,6 +142,10 @@ int cmu_close(cmu_socket_t *sock) {
 }
 
 int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
+  while (!sock->initialized) {}
+  
+  printf("begin to read\n");
+
   int read_len = 0;
 
   if (length < 0) {
@@ -146,17 +153,19 @@ int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
     return EXIT_ERROR;
   }
 
-  while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
-  }
+  // while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+  // }
 
   switch (flags) {
     case NO_FLAG:
       while (recv_buffer_max_read(sock->recv_buf) == 0) {
+        printf("stuck in recv_buffer_max_read(sock->recv_buf) == 0 \n");
         pthread_cond_wait(&(sock->wait_cond), &(sock->recv_lock));
       }
     // Fall through.
     case NO_WAIT:
       if (recv_buffer_max_read(sock->recv_buf) > 0) {
+        printf("recv_buffer_max_read(sock->recv_buf) : %d\n", recv_buffer_max_read(sock->recv_buf));
         if (recv_buffer_max_read(sock->recv_buf) > (uint32_t)length) {
           read_len = length;
         } else {
@@ -169,11 +178,15 @@ int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
       perror("ERROR Unknown flag.\n");
       read_len = EXIT_ERROR;
   }
-  pthread_mutex_unlock(&(sock->recv_lock));
+  // pthread_mutex_unlock(&(sock->recv_lock));
   return read_len;
 }
 
 int cmu_write(cmu_socket_t *sock, const void *buf, int length) {
+  while (!sock->initialized) {}
+  
+  printf("begin to write\n");
+
   uint32_t written = 0;
 
   while (length > 0) {
