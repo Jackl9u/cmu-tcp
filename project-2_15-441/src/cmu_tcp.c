@@ -51,6 +51,11 @@ int cmu_socket(cmu_socket_t *sock, const cmu_socket_type_t socket_type,
     return EXIT_ERROR;
   }
 
+  // if (pthread_cond_init(&sock->wait_cond2, NULL) != 0) {
+  //   perror("ERROR condition variable not set\n");
+  //   return EXIT_ERROR;
+  // }
+
   srand(time(NULL));
   sock->window.last_ack_received = (uint32_t)rand();    // randomly initialized to be used as ISN
   sock->window.next_seq_expected = 0;                   // NOT USED; set by the Sequence number of the SYN packet of the other end
@@ -144,7 +149,7 @@ int cmu_close(cmu_socket_t *sock) {
 int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
   while (!sock->initialized) {}
   
-  printf("begin to read\n");
+  // printf("begin to read\n");
 
   int read_len = 0;
 
@@ -153,19 +158,19 @@ int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
     return EXIT_ERROR;
   }
 
-  // while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
-  // }
+  while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+  }
 
   switch (flags) {
     case NO_FLAG:
       while (recv_buffer_max_read(sock->recv_buf) == 0) {
-        printf("stuck in recv_buffer_max_read(sock->recv_buf) == 0 \n");
+        // printf("stuck in recv_buffer_max_read(sock->recv_buf) == 0 \n");
         pthread_cond_wait(&(sock->wait_cond), &(sock->recv_lock));
       }
     // Fall through.
     case NO_WAIT:
       if (recv_buffer_max_read(sock->recv_buf) > 0) {
-        printf("recv_buffer_max_read(sock->recv_buf) : %d\n", recv_buffer_max_read(sock->recv_buf));
+        // printf("recv_buffer_max_read(sock->recv_buf) : %d\n", recv_buffer_max_read(sock->recv_buf));
         if (recv_buffer_max_read(sock->recv_buf) > (uint32_t)length) {
           read_len = length;
         } else {
@@ -178,21 +183,23 @@ int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
       perror("ERROR Unknown flag.\n");
       read_len = EXIT_ERROR;
   }
-  // pthread_mutex_unlock(&(sock->recv_lock));
+  pthread_mutex_unlock(&(sock->recv_lock));
   return read_len;
 }
 
 int cmu_write(cmu_socket_t *sock, const void *buf, int length) {
   while (!sock->initialized) {}
   
-  printf("begin to write\n");
+  // printf("begin to write\n");
 
   uint32_t written = 0;
 
   while (length > 0) {
+    // printf("stuck in here\n");
+
     while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
     }
-    
+
     uint32_t write_len;
     if ((uint32_t)length > send_buffer_max_write(sock->send_buf)) {
       write_len = send_buffer_max_write(sock->send_buf);
@@ -203,7 +210,11 @@ int cmu_write(cmu_socket_t *sock, const void *buf, int length) {
       send_buffer_write(sock->send_buf, (uint8_t*)buf+written, write_len);
       written += write_len;
       length -= write_len;
-    }
+    } 
+    
+    // else {
+    //   pthread_cond_wait(&(sock->wait_cond2), &(sock->send_lock));
+    // }
 
     pthread_mutex_unlock(&(sock->send_lock));
   }

@@ -79,6 +79,7 @@ typedef struct {
   int dying;
   pthread_mutex_t death_lock;
   pthread_cond_t wait_cond;
+  // pthread_cond_t wait_cond2;
   
   window_t window;
   cmu_socket_state_t state;

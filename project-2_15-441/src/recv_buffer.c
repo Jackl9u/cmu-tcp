@@ -28,7 +28,13 @@ uint32_t max(uint32_t a, uint32_t b) {
 
 uint32_t seqnum_to_index_recv(recv_buffer_t* recv_buffer, uint32_t seqnum) {
     assert(seqnum >= recv_buffer->last_byte_read_seqnum);
-    assert(seqnum < recv_buffer->last_byte_read_seqnum + recv_buffer->capacity);
+    // printf("seqnum_to_index_recv.seqnum : %d\n", seqnum);
+    // printf("seqnum_to_index_recv.last_byte_read_seqnum : %d\n", recv_buffer->last_byte_read_seqnum);
+    // printf("seqnum_to_index_recv.capacity : %d\n", recv_buffer->capacity);
+    // if (seqnum == recv_buffer->last_byte_read_seqnum + recv_buffer->capacity) {
+    //     printf("daf\n");
+    // }
+    // assert(seqnum < recv_buffer->last_byte_read_seqnum + recv_buffer->capacity);
     return (recv_buffer->last_byte_read_index + (seqnum - recv_buffer->last_byte_read_seqnum)) % recv_buffer->capacity;
 }
 
@@ -64,6 +70,9 @@ void safe_memcpy_to_recvbuf(recv_buffer_t* recv_buffer, uint32_t start_index, ui
 
 void safe_memcpy_from_recvbuf(recv_buffer_t* recv_buffer, uint32_t len, uint8_t* data) {
     uint32_t end_seq = recv_buffer->last_byte_read_seqnum + len;
+    // printf("safe_memcpy_from_recvbuf.last_byte_read_seqnum : %d\n", recv_buffer->last_byte_read_seqnum);
+    // printf("safe_memcpy_from_recvbuf.len : %d\n", len);
+    // printf("safe_memcpy_from_recvbuf.end_seq : %d\n", end_seq);
     uint32_t end_index = seqnum_to_index_recv(recv_buffer, end_seq);
     if (end_index > recv_buffer->last_byte_read_index) {
         // no wrap around
@@ -198,7 +207,7 @@ recv_buffer_t* recv_buffer_create(uint32_t capacity) {
 }
 
 void recv_buffer_initialize(recv_buffer_t* recv_buffer, uint32_t other_isn) {
-    printf("recv_buffer->last_byte_read_seqnum : %d\n", recv_buffer->last_byte_read_seqnum);
+    // printf("recv_buffer->last_byte_read_seqnum : %d\n", recv_buffer->last_byte_read_seqnum);
     assert(recv_buffer->last_byte_read_seqnum == 0);
     recv_buffer->last_byte_read_seqnum = other_isn;
     recv_buffer->last_byte_read_index = 0;
@@ -217,6 +226,7 @@ uint32_t recv_buffer_max_receive(recv_buffer_t* recv_buffer) {
 }
 
 void recv_buffer_read(recv_buffer_t* recv_buffer, uint8_t* buf, uint32_t len) {
+    printf("recv_buffer_read.len : %d\n", len);
     assert(len <= recv_buffer_max_read(recv_buffer));
     if (len == 0) {
         return;

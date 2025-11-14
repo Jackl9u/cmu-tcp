@@ -84,7 +84,7 @@ void handle_message(void *in, uint8_t* pkt) {
       if (recv_buffer_can_receive(sock->recv_buf, seqnum, payload_len) == 0) {
         recv_buffer_receive(sock->recv_buf, seqnum, payload_len, get_payload(pkt));
         pthread_cond_signal(&(sock->wait_cond));
-        printf("notified\n");
+        // printf("notified\n");
       }
       sock->window.next_seq_expected = get_next_byte_expected_seqnum(sock->recv_buf);
       pthread_mutex_unlock(&(sock->recv_lock));
@@ -126,7 +126,7 @@ int counter2_lim = 0;
 int counter3_lim = 0;
 
 void init_handshake_client(void *in) {
-  printf("client start handshake\n");
+  // printf("client start handshake\n");
   cmu_socket_t *sock = (cmu_socket_t *)in;
   assert(sock->type == TCP_INITIATOR);
 
@@ -161,13 +161,13 @@ void init_handshake_client(void *in) {
 
   while (sock->state != ESTABLISHED) {
     // wait at most DEFAULT_TIMEOUT for the reply
-    printf("client in while loop\n");
+    // printf("client in while loop\n");
     struct pollfd ack_fd;
     ack_fd.fd = sock->socket;
     ack_fd.events = POLLIN;
     if (poll(&ack_fd, 1, DEFAULT_TIMEOUT) <= 0) {
       // reached timeout and still don't have ack, resend the packet
-      printf("re-send message\n");
+      // printf("re-send message\n");
       if (counter1 >= counter1_lim) {
         sendto(sock->socket, packet, plen, 0,
               (struct sockaddr *)&(sock->conn), conn_len);
@@ -226,7 +226,7 @@ void init_handshake_client(void *in) {
           counter2 += 1;
         }
         
-        printf("client sent ack packet back\n");
+        // printf("client sent ack packet back\n");
 
         free(packet);
 
@@ -236,11 +236,11 @@ void init_handshake_client(void *in) {
   }
 
   sock->initialized = true;
-  printf("client finished handshake\n");
+  printf("!-- client finished handshake --!\n");
 }
 
 void init_handshake_server(void *in) {
-  printf("server start handshake\n");
+  // printf("server start handshake\n");
   cmu_socket_t *sock = (cmu_socket_t *)in;
   socklen_t conn_len = sizeof(sock->conn);
   assert(sock->type == TCP_LISTENER);
@@ -264,7 +264,7 @@ void init_handshake_server(void *in) {
 
   while (sock->state != ESTABLISHED) {
     if (sock->state == LISTEN) {
-      printf("server in LISTEN\n");
+      // printf("server in LISTEN\n");
       cmu_tcp_header_t hdr;
       ssize_t len = recvfrom(sock->socket, &hdr, sizeof(cmu_tcp_header_t),
                      0, (struct sockaddr *)&(sock->conn), &conn_len);
@@ -311,7 +311,7 @@ void init_handshake_server(void *in) {
       sock->state = SYN_RCVD;
     } else {
       assert(sock->state == SYN_RCVD);
-      printf("in SYN_RCVD state \n");
+      // printf("in SYN_RCVD state \n");
 
       cmu_tcp_header_t hdr;
       ssize_t len = recvfrom(sock->socket, &hdr, sizeof(cmu_tcp_header_t),
@@ -356,7 +356,7 @@ void init_handshake_server(void *in) {
     free(packet);
   }
 
-  printf("server finished handshake\n");
+  printf("!-- server finished handshake --!\n");
 }
 
 void check_for_data(cmu_socket_t *sock, cmu_read_mode_t flags) {
@@ -411,13 +411,8 @@ void multiple_send(cmu_socket_t *sock) {
   int sockfd = sock->socket;
   size_t conn_len = sizeof(sock->conn);
 
-  while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
-  }
   uint32_t curr_adv_window = recv_buffer_max_receive(sock->recv_buf);
-  pthread_mutex_unlock(&(sock->recv_lock));
-
-  while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
-  }
+ 
   uint32_t num_unacknowledged = get_unacknowledged_count(sock->send_buf);
   if (num_unacknowledged < sock->window.rcvd_advertised_window) {
     uint32_t num_fresh_data_available = send_buffer_max_new_dump(sock->send_buf);
@@ -456,9 +451,10 @@ void multiple_send(cmu_socket_t *sock) {
       target_send_len -= payload_len;        
       free(payload);
     }
+  } else {
+    // printf("num_unacknowledged : %d\n", num_unacknowledged);
+    // printf("sock->window.rcvd_advertised_window : %d\n", sock->window.rcvd_advertised_window);
   }
-
-  pthread_mutex_unlock(&(sock->send_lock));
 }
 
 // send_lock already hold by the caller before calling this function
@@ -563,13 +559,14 @@ void *begin_backend(void *in) {
     long curr_ts = get_time_ms();
 
     if (curr_ts - last_ack_ts > DEFAULT_TIMEOUT && num_unacknowledged > 0) {
+      // printf("got here 2\n");
       resend_unacknowledged(sock);
-      pthread_mutex_unlock(&(sock->send_lock));
     } else {
-      pthread_mutex_unlock(&(sock->send_lock));
       // otherwise, send 'fresh' data on the buffer
+      // printf("trying to send");
       multiple_send(sock);
     }
+    pthread_mutex_unlock(&(sock->send_lock));
 
     // TODO : zero window probe
 

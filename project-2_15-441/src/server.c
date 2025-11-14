@@ -34,20 +34,33 @@ void functionality(cmu_socket_t *sock) {
   int n;
 
   n = cmu_read(sock, buf, BUF_SIZE, NO_FLAG);
-  printf("R: %s\n", buf);
-  printf("N: %d\n", n);
+  printf("N1: %d\n", n);
+  printf("R1: %s\n", buf);
+  
   cmu_write(sock, "hi there", 9);
+  
   n = cmu_read(sock, buf, 200, NO_FLAG);
-  printf("R: %s\n", buf);
-  printf("N: %d\n", n);
+  printf("N2: %d\n", n);
+  printf("R2: %s\n", buf);
+  
   cmu_write(sock, "https://www.youtube.com/watch?v=dQw4w9WgXcQ", 44);
 
   sleep(1);
+  
   n = cmu_read(sock, buf, BUF_SIZE, NO_FLAG);
-  printf("N: %d\n", n);
+  printf("N3: %d\n", n);
+  printf("R3: %s\n", buf);
+
+  while (true) {
+    n = cmu_read(sock, buf, BUF_SIZE, NO_WAIT);
+    printf("N4: %d\n", n);
+    printf("R4: %s\n", buf);
+  }
+  
   fp = fopen("/tmp/file.c", "w");
   fwrite(buf, 1, n, fp);
   fclose(fp);
+  printf("functionality ends\n");
 }
 
 int main() {
@@ -72,6 +85,10 @@ int main() {
   }
 
   functionality(&socket);
+
+  while (true) {
+
+  }
 
   if (cmu_close(&socket) < 0) {
     exit(EXIT_FAILURE);

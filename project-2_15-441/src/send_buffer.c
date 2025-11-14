@@ -104,7 +104,7 @@ send_buffer_t* send_buffer_create(uint32_t capacity) {
 }
 
 void send_buffer_initialize(send_buffer_t* send_buffer, uint32_t isn) {
-    printf("send_buffer->last_byte_acked_seqnum : %d\n", send_buffer->last_byte_acked_seqnum);
+    // printf("send_buffer->last_byte_acked_seqnum : %d\n", send_buffer->last_byte_acked_seqnum);
     assert(send_buffer->last_byte_acked_seqnum == 0);
     send_buffer->last_byte_acked_ts = get_time_ms();
     send_buffer->last_byte_acked_seqnum = isn;
