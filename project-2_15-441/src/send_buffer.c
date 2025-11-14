@@ -5,12 +5,29 @@
 
 #include "send_buffer.h"
 
+long get_time_ms() {
+    struct timeval tv;
+    gettimeofday(&tv, NULL);
+    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
+}
+
 /* seqnum and index */
 
 uint32_t seqnum_to_index_send(send_buffer_t* send_buffer, uint32_t seqnum) {
     assert(seqnum >= send_buffer->last_byte_acked_seqnum);
     assert(seqnum < send_buffer->last_byte_acked_seqnum + send_buffer->capacity);
     return (send_buffer->last_byte_acked_index + (seqnum - send_buffer->last_byte_acked_seqnum)) % send_buffer->capacity;
+}
+
+uint32_t index_to_seqnum_send(send_buffer_t* send_buffer, uint32_t index) {
+    if (index >= send_buffer->last_byte_acked_index) {
+        // not considered to have wrap around
+        return index - send_buffer->last_byte_acked_index + send_buffer->last_byte_acked_seqnum;
+    } else {
+        // wrap around happens
+        uint32_t tail_len = send_buffer->capacity-1 - send_buffer->last_byte_acked_index;
+        return index + 1 + tail_len + send_buffer->last_byte_acked_seqnum;
+    }
 }
 
 uint32_t get_next_byte_written_seqnum(send_buffer_t* send_buffer) {
@@ -47,7 +64,7 @@ uint32_t get_last_byte_sent_seqnum(send_buffer_t* send_buffer) {
 
 /* memcpy */
 
-void safe_memcpy_to_sendbuf(send_buffer_t* send_buffer, uint32_t len, uint8_t* data) {
+void safe_memcpy_to_sendbuf(send_buffer_t* send_buffer, uint32_t len, const uint8_t* data) {
     uint32_t start_index = send_buffer->next_byte_written_index;
     if (start_index + len - 1 <= send_buffer->capacity-1) {
         // can directly write
@@ -87,6 +104,7 @@ send_buffer_t* send_buffer_create(uint32_t capacity) {
 
 void send_buffer_initialize(send_buffer_t* send_buffer, uint32_t isn) {
     assert(send_buffer->last_byte_acked_seqnum == 0);
+    send_buffer->last_byte_acked_ts = get_time_ms();
     send_buffer->last_byte_acked_seqnum = isn;
     send_buffer->last_byte_acked_index = 0;
     send_buffer->last_byte_sent_index = 0;
@@ -106,7 +124,7 @@ uint32_t send_buffer_max_new_dump(send_buffer_t* send_buffer) {
     return next_byte_written_seqnum - last_byte_sent_seqnum - 1;
 }
 
-void send_buffer_write(send_buffer_t* send_buffer, uint8_t* buf, uint32_t len) {
+void send_buffer_write(send_buffer_t* send_buffer, const uint8_t* buf, uint32_t len) {
     assert(len <= send_buffer_max_write(send_buffer));
     if (len == 0) {
         return;
@@ -131,7 +149,13 @@ void send_buffer_dump(send_buffer_t* send_buffer, uint32_t start_index, uint32_t
     safe_memcpy_from_sendbuf(send_buffer, start_index, len, data);
 
     // update internal states
-    send_buffer->last_byte_sent_index = 0; /* use a index_to_seqnum function */
+    uint32_t end_index = (start_index + len - 1) % send_buffer->capacity;
+    uint32_t temp_last_byte_sent_seqnum = index_to_seqnum_send(send_buffer, end_index);
+    uint32_t original_last_byte_sent_seqnum = get_last_byte_sent_seqnum(send_buffer);
+
+    if (temp_last_byte_sent_seqnum >= original_last_byte_sent_seqnum) {
+        send_buffer->last_byte_sent_index = end_index;
+    }
 }
 
 void send_buffer_clean(send_buffer_t* send_buffer) {
@@ -145,5 +169,14 @@ void send_buffer_update_ack(send_buffer_t* send_buffer, uint32_t hdr_ack) {
         uint32_t idx = seqnum_to_index_send(send_buffer, hdr_ack);
         send_buffer->last_byte_acked_seqnum = hdr_ack;
         send_buffer->last_byte_acked_index = idx;
+        send_buffer->last_byte_acked_ts = get_time_ms();
     }
+}
+
+uint32_t get_unacknowledged_count(send_buffer_t* send_buffer) {
+    return get_last_byte_sent_seqnum(send_buffer) - send_buffer->last_byte_acked_seqnum;
+}
+
+uint8_t* get_buf_at_index_send(send_buffer_t* send_buffer, uint32_t index) {
+    return send_buffer->buffer + index;
 }

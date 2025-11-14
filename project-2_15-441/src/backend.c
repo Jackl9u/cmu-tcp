@@ -39,12 +39,6 @@
 /* ******************************************************************************************* */
 /* ******************************************************************************************* */
 
-long get_time_ms() {
-    struct timeval tv;
-    gettimeofday(&tv, NULL);
-    return tv.tv_sec * 1000 + tv.tv_usec / 1000;
-}
-
 void handle_message(void *in, uint8_t* pkt) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
   socklen_t conn_len = sizeof(sock->conn);
@@ -74,6 +68,10 @@ void handle_message(void *in, uint8_t* pkt) {
 
     // update advertised window
     sock->window.rcvd_advertised_window = get_advertised_window(hdr);
+    if (sock->window.rcvd_advertised_window == 0) {
+      // TODO : zero window probe
+
+    }
 
     uint16_t payload_len = get_payload_len(pkt);
     if (payload_len != 0) {
@@ -396,23 +394,128 @@ void check_for_data(cmu_socket_t *sock, cmu_read_mode_t flags) {
   }
 }
 
+// try to send data that was not previously sent before
+// do so by calculating 'next_byte_written_index - last_byte_sent_index'
+// timeout resend is not handled here
 void multiple_send(cmu_socket_t *sock) {
-  // uint8_t *msg;
-  // int sockfd = sock->socket;
-  // size_t conn_len = sizeof(sock->conn);
+  uint8_t *msg;
+  int sockfd = sock->socket;
+  size_t conn_len = sizeof(sock->conn);
+
+  while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+  }
+  uint32_t curr_adv_window = recv_buffer_max_receive(sock->recv_buf);
+  pthread_mutex_unlock(&(sock->recv_lock));
 
   while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
   }
+  uint32_t num_unacknowledged = get_unacknowledged_count(sock->send_buf);
+  if (num_unacknowledged < sock->window.rcvd_advertised_window) {
+    uint32_t num_fresh_data_available = send_buffer_max_new_dump(sock->send_buf);
+    uint32_t max_fresh_data_allowed = sock->window.rcvd_advertised_window - num_unacknowledged;
+    uint32_t target_send_len = num_fresh_data_available < max_fresh_data_allowed ? num_fresh_data_available : max_fresh_data_allowed;
 
+    // construction the packet to send
+    uint16_t payload_len;
+    uint16_t src = sock->my_port;
+    uint16_t dst = ntohs(sock->conn.sin_port);
+    uint32_t seq;
+    uint32_t ack = sock->window.next_seq_expected; // this field will not change during the execution of this function, since the lock is held
+    uint16_t hlen = sizeof(cmu_tcp_header_t);
+    uint16_t plen;
+    uint8_t flags = ACK_FLAG_MASK;
+    uint16_t adv_window = curr_adv_window;
+    uint16_t ext_len = 0;
+    uint8_t *ext_data = NULL;
+    uint8_t *payload;
 
-  
+    while (target_send_len > 0) {
+      payload_len = MIN(target_send_len, (uint32_t)MSS);
+      seq = get_last_byte_sent_seqnum(sock->send_buf) + 1;
+      plen = hlen + payload_len;
+      uint32_t start_index = (sock->send_buf->last_byte_sent_index+1)%(sock->send_buf->capacity);
+      payload = malloc(payload_len * sizeof(uint8_t));
+      send_buffer_dump(sock->send_buf, start_index, payload_len, payload);
+    
+      msg = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
+                          ext_len, ext_data, payload, payload_len);
+      
+      sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn),
+               conn_len);
+      
+      free(msg);
+      target_send_len -= payload_len;        
+      free(payload);
+    }
+  }
+
   pthread_mutex_unlock(&(sock->send_lock));
+}
+
+// send_lock already hold by the caller before calling this function
+void resend_unacknowledged(cmu_socket_t *sock) {
+  uint8_t *msg;
+  int sockfd = sock->socket;
+  size_t conn_len = sizeof(sock->conn);
+
+  uint16_t payload_len;
+  uint16_t src = sock->my_port;
+  uint16_t dst = ntohs(sock->conn.sin_port);
+  uint32_t seq;
+  uint32_t ack = sock->window.next_seq_expected; // this field will not change during the execution of this function, since the lock is held
+  uint16_t hlen = sizeof(cmu_tcp_header_t);
+  uint16_t plen;
+  uint8_t flags = ACK_FLAG_MASK;
+  uint16_t adv_window = recv_buffer_max_receive(sock->recv_buf); // not holding recv_lock here; hopefully this will not cause problem
+  uint16_t ext_len = 0;
+  uint8_t *ext_data = NULL;
+
+  uint32_t num_unacknowledged = get_unacknowledged_count(sock->send_buf);
+  assert(num_unacknowledged > 0);
+  uint32_t target_send_len = MIN(num_unacknowledged, sock->window.rcvd_advertised_window);
+  if (target_send_len == 0) {
+    // the advertised window is 0, do zero window probe, send a single byte
+    payload_len = 1;
+    seq = sock->send_buf->last_byte_acked_seqnum + 1;
+    plen = hlen + payload_len;
+    uint32_t start_index = (sock->send_buf->last_byte_acked_index+1)%(sock->send_buf->capacity);
+    // no need to use send_buffer_dump here because we don't want to update the last_sent_index
+    msg = create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
+                          ext_len, ext_data, sock->send_buf->buffer+start_index, payload_len);
+
+    sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn),
+               conn_len);
+
+    free(msg);
+  } else {
+    uint32_t start_index = (sock->send_buf->last_byte_acked_index+1)%(sock->send_buf->capacity);
+    uint32_t start_seq = sock->send_buf->last_byte_acked_seqnum + 1;
+    uint32_t num_sent = 0;
+
+    while (target_send_len > 0) {
+      uint32_t curr_index = (start_index + num_sent)%(sock->send_buf->capacity);
+      uint32_t curr_seq = start_seq + num_sent;
+
+      payload_len = MIN(target_send_len, (uint32_t)MSS);
+      plen = hlen + payload_len;
+      // no need to use send_buffer_dump here because we don't want to update the last_sent_index
+      msg = create_packet(src, dst, curr_seq, ack, hlen, plen, flags, adv_window,
+                          ext_len, ext_data, sock->send_buf->buffer+curr_index, payload_len);
+
+      sendto(sockfd, msg, plen, 0, (struct sockaddr *)&(sock->conn),
+               conn_len);
+
+      free(msg);
+
+      num_sent += payload_len;
+      target_send_len -= payload_len;
+    }
+  }
 }
 
 void *begin_backend(void *in) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
-  // int death, buf_len, send_signal;
-  // uint8_t *data;
+  int death;
 
   // 3-way handshake
   if (sock->type == TCP_INITIATOR) {
@@ -421,61 +524,56 @@ void *begin_backend(void *in) {
     init_handshake_server(in);
   }
 
-  // while (1) {
-  //   while (pthread_mutex_lock(&(sock->death_lock)) != 0) {
-  //   }
-  //   death = sock->dying;
-  //   pthread_mutex_unlock(&(sock->death_lock));
+  while (1) {
+    while (pthread_mutex_lock(&(sock->death_lock)) != 0) {
+    }
+    death = sock->dying;
+    pthread_mutex_unlock(&(sock->death_lock));
 
-  //   while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
-  //   }
-  //   buf_len = send_buffer_max_send(sock->send_buf);
+    while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
+    }
+    uint32_t num_unacknowledged = get_unacknowledged_count(sock->send_buf);
+    uint32_t num_fresh = send_buffer_max_new_dump(sock->send_buf);
+    pthread_mutex_unlock(&(sock->send_lock));
 
-  //   if (death && buf_len == 0) {
-  //     break;
-  //   }
+    if (death && (num_unacknowledged + num_fresh) == 0) {
+      break;
+    }
 
-  //   // check the time passed since the last send
-  //   if (sock->last_send_ms == 0) {
-  //     // everything sent so far got ACKed
-  //   } else {
-  //     long now = get_time_ms();
-  //     if (now - sock->last_send_ms > DEFAULT_TIMEOUT) {
-  //       // send again
+    // check if any data arrives, and update sock->window.ack and such.    
+    check_for_data(sock, NO_WAIT);
 
+    // check if need to resend due to timeout
+    long last_ack_ts;
+    while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
+    }
+    num_unacknowledged = get_unacknowledged_count(sock->send_buf);
+    num_fresh = send_buffer_max_new_dump(sock->send_buf);
+    last_ack_ts = sock->send_buf->last_byte_acked_ts;
+    long curr_ts = get_time_ms();
 
-  //     }
-  //   }
+    if (curr_ts - last_ack_ts > DEFAULT_TIMEOUT && num_unacknowledged > 0) {
+      resend_unacknowledged(sock);
+      pthread_mutex_unlock(&(sock->send_lock));
+    } else {
+      pthread_mutex_unlock(&(sock->send_lock));
+      // otherwise, send 'fresh' data on the buffer
+      multiple_send(sock);
+    }
 
-  //   // receive data
-  //   // ..
+    // TODO : zero window probe
 
-  //   if (buf_len > 0) {
-  //     data = malloc(buf_len);
-  //     memcpy(data, sock->sending_buf, buf_len);
-  //     sock->sending_len = 0;
-  //     free(sock->sending_buf);
-  //     sock->sending_buf = NULL;
-  //     pthread_mutex_unlock(&(sock->send_lock));
-  //     single_send(sock, data, buf_len);
-  //     free(data);
-  //   } else {
-  //     pthread_mutex_unlock(&(sock->send_lock));
-  //   }
+    // alert the application of receiving new data
+    uint32_t available_to_read;
+    while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+    }
+    available_to_read = recv_buffer_max_read(sock->recv_buf);
+    pthread_mutex_unlock(&(sock->recv_lock));
 
-  //   check_for_data(sock, NO_WAIT);
-
-  //   while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
-  //   }
-
-  //   send_signal = sock->received_len > 0;
-
-  //   pthread_mutex_unlock(&(sock->recv_lock));
-
-  //   if (send_signal) {
-  //     pthread_cond_signal(&(sock->wait_cond));
-  //   }
-  // }
+    if (available_to_read > 0) {
+      pthread_cond_signal(&(sock->wait_cond));
+    }
+  }
 
   pthread_exit(NULL);
   return NULL;

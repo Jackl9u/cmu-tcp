@@ -139,7 +139,6 @@ int cmu_close(cmu_socket_t *sock) {
 }
 
 int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
-  uint8_t *new_buf;
   int read_len = 0;
 
   if (length < 0) {
@@ -158,7 +157,7 @@ int cmu_read(cmu_socket_t *sock, void *buf, int length, cmu_read_mode_t flags) {
     // Fall through.
     case NO_WAIT:
       if (recv_buffer_max_read(sock->recv_buf) > 0) {
-        if (recv_buffer_max_read(sock->recv_buf) > length) {
+        if (recv_buffer_max_read(sock->recv_buf) > (uint32_t)length) {
           read_len = length;
         } else {
           read_len = recv_buffer_max_read(sock->recv_buf);
@@ -182,13 +181,13 @@ int cmu_write(cmu_socket_t *sock, const void *buf, int length) {
     }
     
     uint32_t write_len;
-    if (length > send_buffer_max_write(sock->send_buf)) {
+    if ((uint32_t)length > send_buffer_max_write(sock->send_buf)) {
       write_len = send_buffer_max_write(sock->send_buf);
     } else {
       write_len = length;
     }
     if (write_len > 0) {
-      send_buffer_write(sock->send_buf, buf+written, write_len);
+      send_buffer_write(sock->send_buf, (uint8_t*)buf+written, write_len);
       written += write_len;
       length -= write_len;
     }
