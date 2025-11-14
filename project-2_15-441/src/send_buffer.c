@@ -29,6 +29,22 @@ uint32_t get_next_byte_written_seqnum(send_buffer_t* send_buffer) {
     return next_byte_written_seqnum;
 }
 
+uint32_t get_last_byte_sent_seqnum(send_buffer_t* send_buffer) {
+    uint32_t last_byte_sent_seqnum;
+    if (send_buffer->last_byte_sent_index >= send_buffer->last_byte_acked_index) {
+        // no wrap around
+        last_byte_sent_seqnum = send_buffer->last_byte_sent_index;
+        last_byte_sent_seqnum -= send_buffer->last_byte_acked_index;
+        last_byte_sent_seqnum += send_buffer->last_byte_acked_seqnum;
+    } else {
+        // wrap around
+        last_byte_sent_seqnum = send_buffer->capacity-1 - send_buffer->last_byte_acked_index;
+        last_byte_sent_seqnum += send_buffer->last_byte_sent_index+1;
+        last_byte_sent_seqnum += send_buffer->last_byte_acked_seqnum;
+    }
+    return last_byte_sent_seqnum;
+}
+
 /* memcpy */
 
 void safe_memcpy_to_sendbuf(send_buffer_t* send_buffer, uint32_t len, uint8_t* data) {
@@ -44,16 +60,15 @@ void safe_memcpy_to_sendbuf(send_buffer_t* send_buffer, uint32_t len, uint8_t* d
     }
 }
 
-void safe_memcpy_from_sendbuf(send_buffer_t* send_buffer, uint32_t len, uint8_t* data) {
-    uint32_t end_seq = send_buffer->last_byte_acked_seqnum + len;
-    uint32_t end_index = seqnum_to_index_send(send_buffer, end_seq);
+void safe_memcpy_from_sendbuf(send_buffer_t* send_buffer, uint32_t start_index, uint32_t len, uint8_t* data) {
+    uint32_t end_index = start_index + len - 1;
     if (end_index > send_buffer->last_byte_acked_index) {
         // no wrap around
-        memcpy(data, send_buffer->buffer + send_buffer->last_byte_acked_index+1, len);
+        memcpy(data, send_buffer->buffer+start_index, len);
     } else {
         // wrap around happens
-        uint32_t tail_len = send_buffer->capacity-1 - send_buffer->last_byte_acked_index;
-        memcpy(data, send_buffer->buffer + send_buffer->last_byte_acked_index+1, tail_len);
+        uint32_t tail_len = send_buffer->capacity - start_index;
+        memcpy(data, send_buffer->buffer+start_index, tail_len);
         memcpy(data+tail_len, send_buffer->buffer, len-tail_len);
     }
 }
@@ -84,9 +99,11 @@ uint32_t send_buffer_max_write(send_buffer_t* send_buffer) {
     return send_buffer->capacity - buf_size;
 }
 
-uint32_t send_buffer_max_dump(send_buffer_t* send_buffer) {
+// return the maximum number of "never-sent bytes" that we can send
+uint32_t send_buffer_max_new_dump(send_buffer_t* send_buffer) {
     uint32_t next_byte_written_seqnum = get_next_byte_written_seqnum(send_buffer);
-    return next_byte_written_seqnum - send_buffer->last_byte_acked_seqnum - 1;
+    uint32_t last_byte_sent_seqnum = get_last_byte_sent_seqnum(send_buffer);
+    return next_byte_written_seqnum - last_byte_sent_seqnum - 1;
 }
 
 void send_buffer_write(send_buffer_t* send_buffer, uint8_t* buf, uint32_t len) {
@@ -103,17 +120,18 @@ void send_buffer_write(send_buffer_t* send_buffer, uint8_t* buf, uint32_t len) {
     send_buffer->next_byte_written_index %= send_buffer->capacity;
 }
 
-void send_buffer_dump(send_buffer_t* send_buffer, uint32_t len, uint8_t* data) {
-    assert(len <= send_buffer_max_dump(send_buffer));
+// this dump function should support a start_index since we may dump from last_sent_index
+// or dump from last_ack_index in case of a timeout
+void send_buffer_dump(send_buffer_t* send_buffer, uint32_t start_index, uint32_t len, uint8_t* data) {
     if (len == 0) {
         return;
     }
 
     // copy data from buffer
-    safe_memcpy_from_sendbuf(send_buffer, len, data);
+    safe_memcpy_from_sendbuf(send_buffer, start_index, len, data);
 
     // update internal states
-    send_buffer->last_byte_sent_index = seqnum_to_index_send(send_buffer, send_buffer->last_byte_acked_seqnum + len);
+    send_buffer->last_byte_sent_index = 0; /* use a index_to_seqnum function */
 }
 
 void send_buffer_clean(send_buffer_t* send_buffer) {

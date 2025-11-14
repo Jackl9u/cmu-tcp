@@ -21,13 +21,13 @@ void send_buffer_initialize(send_buffer_t* send_buffer, uint32_t isn);
 uint32_t send_buffer_max_write(send_buffer_t* send_buffer);
 
 // return the maximum number of bytes that can be dumped (last_byte_written_index - last_byte_acked_index)
-uint32_t send_buffer_max_dump(send_buffer_t* send_buffer);
+uint32_t send_buffer_max_new_dump(send_buffer_t* send_buffer);
 
 // called by the application. write the 'len' bytes in 'buf' to send_buffer
 void send_buffer_write(send_buffer_t* send_buffer, uint8_t* buf, uint32_t len);
 
 // dump 'len' bytes starting from 'last_byte_acked_index' into 'data' for sendto()
-void send_buffer_dump(send_buffer_t* send_buffer, uint32_t len, uint8_t* data);
+void send_buffer_dump(send_buffer_t* send_buffer, uint32_t start_index, uint32_t len, uint8_t* data);
 
 // free the resources
 void send_buffer_clean(send_buffer_t* send_buffer);

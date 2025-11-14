@@ -352,6 +352,63 @@ void init_handshake_server(void *in) {
   printf("server finished handshake\n");
 }
 
+void check_for_data(cmu_socket_t *sock, cmu_read_mode_t flags) {
+  cmu_tcp_header_t hdr;
+  uint8_t *pkt;
+  socklen_t conn_len = sizeof(sock->conn);
+  ssize_t len = 0;
+  uint32_t plen = 0, buf_size = 0, n = 0;
+
+  switch (flags) {
+    case NO_FLAG:
+      len = recvfrom(sock->socket, &hdr, sizeof(cmu_tcp_header_t), MSG_PEEK,
+                     (struct sockaddr *)&(sock->conn), &conn_len);
+      break;
+    case TIMEOUT: {
+      // Using `poll` here so that we can specify a timeout.
+      struct pollfd ack_fd;
+      ack_fd.fd = sock->socket;
+      ack_fd.events = POLLIN;
+      // Timeout after DEFAULT_TIMEOUT.
+      if (poll(&ack_fd, 1, DEFAULT_TIMEOUT) <= 0) {
+        break;
+      }
+    }
+    // Fallthrough.
+    case NO_WAIT:
+      len = recvfrom(sock->socket, &hdr, sizeof(cmu_tcp_header_t),
+                     MSG_DONTWAIT | MSG_PEEK, (struct sockaddr *)&(sock->conn),
+                     &conn_len);
+      break;
+    default:
+      perror("ERROR unknown flag");
+  }
+  if (len >= (ssize_t)sizeof(cmu_tcp_header_t)) {
+    plen = get_plen(&hdr);
+    pkt = malloc(plen);
+    while (buf_size < plen) {
+      n = recvfrom(sock->socket, pkt + buf_size, plen - buf_size, 0,
+                   (struct sockaddr *)&(sock->conn), &conn_len);
+      buf_size = buf_size + n;
+    }
+    handle_message(sock, pkt);
+    free(pkt);
+  }
+}
+
+void multiple_send(cmu_socket_t *sock) {
+  // uint8_t *msg;
+  // int sockfd = sock->socket;
+  // size_t conn_len = sizeof(sock->conn);
+
+  while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
+  }
+
+
+  
+  pthread_mutex_unlock(&(sock->send_lock));
+}
+
 void *begin_backend(void *in) {
   cmu_socket_t *sock = (cmu_socket_t *)in;
   // int death, buf_len, send_signal;
