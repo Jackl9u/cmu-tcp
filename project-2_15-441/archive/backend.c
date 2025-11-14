@@ -1,3 +1,11 @@
+while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+}
+pthread_mutex_unlock(&(sock->recv_lock));
+
+while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
+}
+pthread_mutex_unlock(&(sock->send_lock));
+
 /**
  * Copyright (C) 2022 Carnegie Mellon University
  *

@@ -120,3 +120,12 @@ void send_buffer_clean(send_buffer_t* send_buffer) {
     free(send_buffer->buffer);
     free(send_buffer);
 }
+
+void send_buffer_update_ack(send_buffer_t* send_buffer, uint32_t hdr_ack) {
+    hdr_ack -= 1;
+    if (hdr_ack > send_buffer->last_byte_acked_seqnum) {
+        uint32_t idx = seqnum_to_index_send(send_buffer, hdr_ack);
+        send_buffer->last_byte_acked_seqnum = hdr_ack;
+        send_buffer->last_byte_acked_index = idx;
+    }
+}

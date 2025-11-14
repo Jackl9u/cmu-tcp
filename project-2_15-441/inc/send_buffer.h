@@ -32,4 +32,8 @@ void send_buffer_dump(send_buffer_t* send_buffer, uint32_t len, uint8_t* data);
 // free the resources
 void send_buffer_clean(send_buffer_t* send_buffer);
 
+// hdr_ack : the sequence number of the NEXT expected byte
+// last_byte_acked_seqnum : the sequence number of the lastest byte that is actually RECEIVED
+void send_buffer_update_ack(send_buffer_t* send_buffer, uint32_t hdr_ack);
+
 #endif  // PROJECT_2_15_441_INC_SEND_BUFFER_H_

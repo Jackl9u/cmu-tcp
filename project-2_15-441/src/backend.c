@@ -33,6 +33,7 @@
 #include "send_buffer.h"
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
+#define MAX(X, Y) (((X) > (Y)) ? (X) : (Y))
 
 /* ******************************************************************************************* */
 /* ******************************************************************************************* */
@@ -49,11 +50,71 @@ void handle_message(void *in, uint8_t* pkt) {
   socklen_t conn_len = sizeof(sock->conn);
   cmu_tcp_header_t* hdr = (cmu_tcp_header_t*)pkt;
 
-  // require all packets to carry ACK number
+  // require all packets to carry ACK number and advertised_window
   assert(get_flags(hdr) & ACK_FLAG_MASK);
+  // should not see a SYN packet after initial handshake
+  assert(!(get_flags(hdr) & SYN_FLAG_MASK));
 
-  
+  if (get_flags(hdr) & FIN_FLAG_MASK) {
+    // TDDO : special handling for a FIN packet
 
+  } else {
+    // update ACK
+    uint32_t acknum = get_ack(hdr);
+    if (acknum == sock->window.last_ack_received) {
+      // TODO : duplicate ACK, congestion control
+
+    } else {
+      sock->window.last_ack_received = MAX(sock->window.last_ack_received, acknum);
+      while (pthread_mutex_lock(&(sock->send_lock)) != 0) {
+      }
+      send_buffer_update_ack(sock->send_buf, acknum);
+      pthread_mutex_unlock(&(sock->send_lock));
+    }
+
+    // update advertised window
+    sock->window.rcvd_advertised_window = get_advertised_window(hdr);
+
+    uint16_t payload_len = get_payload_len(pkt);
+    if (payload_len != 0) {
+      // not pure-ACK packet, has some data
+      uint32_t seqnum = get_seq(hdr);
+      // doesn't matter if the seqnum is what we expected, we still try to receive it
+      // after receiving it and update the internal recv_buffer, then send an ACK back
+      while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+      }
+      if (recv_buffer_can_receive(sock->recv_buf, seqnum, payload_len)) {
+        recv_buffer_receive(sock->recv_buf, seqnum, payload_len, get_payload(pkt));
+      }
+      sock->window.next_seq_expected = get_next_byte_expected_seqnum(sock->recv_buf);
+      pthread_mutex_unlock(&(sock->recv_lock));
+      
+      // respond with a pure ACK message
+      payload_len = 0;
+      uint8_t *payload = NULL;
+      uint16_t ext_len = 0;
+      uint8_t *ext_data = NULL;
+      uint16_t src = sock->my_port;
+      uint16_t dst = ntohs(sock->conn.sin_port);
+      uint32_t seq = sock->window.last_ack_received;
+      uint32_t ack = sock->window.next_seq_expected;
+      uint16_t hlen = sizeof(cmu_tcp_header_t);
+      uint16_t plen = hlen + ext_len + payload_len;
+      uint8_t flags = ACK_FLAG_MASK;
+      while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+      }
+      uint16_t adv_window = recv_buffer_max_receive(sock->recv_buf);
+      pthread_mutex_unlock(&(sock->recv_lock));
+
+      uint8_t *packet =
+          create_packet(src, dst, seq, ack, hlen, plen, flags, adv_window,
+                        ext_len, ext_data, payload, payload_len);
+      
+      sendto(sock->socket, packet, plen, 0,
+          (struct sockaddr *)&(sock->conn), conn_len);
+      free(packet);
+    }
+  }
 }
 
 int counter1 = 0;

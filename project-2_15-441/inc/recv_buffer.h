@@ -52,4 +52,5 @@ void recv_buffer_receive(recv_buffer_t* recv_buffer, uint32_t seqnum, uint32_t l
 // free the resources
 void recv_buffer_clean(recv_buffer_t* recv_buffer);
 
+uint32_t get_next_byte_expected_seqnum(recv_buffer_t* recv_buffer);
 #endif  // PROJECT_2_15_441_INC_RECV_BUFFER_H_
