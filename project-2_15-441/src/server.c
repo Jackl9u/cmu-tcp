@@ -28,27 +28,27 @@
  *  the sockets will be used.
  *
  */
-// void functionality(cmu_socket_t *sock) {
-//   uint8_t buf[BUF_SIZE];
-//   FILE *fp;
-//   int n;
+void functionality(cmu_socket_t *sock) {
+  uint8_t buf[BUF_SIZE];
+  FILE *fp;
+  int n;
 
-//   n = cmu_read(sock, buf, BUF_SIZE, NO_FLAG);
-//   printf("R: %s\n", buf);
-//   printf("N: %d\n", n);
-//   cmu_write(sock, "hi there", 9);
-//   n = cmu_read(sock, buf, 200, NO_FLAG);
-//   printf("R: %s\n", buf);
-//   printf("N: %d\n", n);
-//   cmu_write(sock, "https://www.youtube.com/watch?v=dQw4w9WgXcQ", 44);
+  n = cmu_read(sock, buf, BUF_SIZE, NO_FLAG);
+  printf("R: %s\n", buf);
+  printf("N: %d\n", n);
+  cmu_write(sock, "hi there", 9);
+  n = cmu_read(sock, buf, 200, NO_FLAG);
+  printf("R: %s\n", buf);
+  printf("N: %d\n", n);
+  cmu_write(sock, "https://www.youtube.com/watch?v=dQw4w9WgXcQ", 44);
 
-//   sleep(1);
-//   n = cmu_read(sock, buf, BUF_SIZE, NO_FLAG);
-//   printf("N: %d\n", n);
-//   fp = fopen("/tmp/file.c", "w");
-//   fwrite(buf, 1, n, fp);
-//   fclose(fp);
-// }
+  sleep(1);
+  n = cmu_read(sock, buf, BUF_SIZE, NO_FLAG);
+  printf("N: %d\n", n);
+  fp = fopen("/tmp/file.c", "w");
+  fwrite(buf, 1, n, fp);
+  fclose(fp);
+}
 
 int main() {
   int portno;
@@ -75,11 +75,11 @@ int main() {
     
   }
 
-  // functionality(&socket);
+  functionality(&socket);
 
-  // if (cmu_close(&socket) < 0) {
-  //   exit(EXIT_FAILURE);
-  // }
+  if (cmu_close(&socket) < 0) {
+    exit(EXIT_FAILURE);
+  }
 
   return EXIT_SUCCESS;
 }
