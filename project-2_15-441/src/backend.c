@@ -29,6 +29,8 @@
 
 #include "cmu_packet.h"
 #include "cmu_tcp.h"
+#include "recv_buffer.h"
+#include "send_buffer.h"
 
 #define MIN(X, Y) (((X) < (Y)) ? (X) : (Y))
 
@@ -120,6 +122,13 @@ void init_handshake_client(void *in) {
         // the packet must be SYN-ACK
         assert(get_flags(&hdr) & SYN_FLAG_MASK);
         assert(get_flags(&hdr) & ACK_FLAG_MASK);
+
+        // upon receiving the first SYN packet, 
+        // use the ISN to initialize the receive_buffer
+        while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+        }
+        send_buffer_initialize(sock->send_buf, get_seq(&hdr));
+        pthread_mutex_unlock(&(sock->recv_lock));
         
         assert(get_ack(&hdr) == sock->window.last_ack_received + 1);
         sock->window.last_ack_received = get_ack(&hdr);
@@ -197,6 +206,13 @@ void init_handshake_server(void *in) {
 
       // the packet must be SYN
       assert(get_flags(&hdr) == SYN_FLAG_MASK);
+
+      // upon receiving the first SYN packet, 
+      // use the ISN to initialize the receive_buffer
+      while (pthread_mutex_lock(&(sock->recv_lock)) != 0) {
+      }
+      send_buffer_initialize(sock->send_buf, get_seq(&hdr));
+      pthread_mutex_unlock(&(sock->recv_lock));
 
       sock->window.next_seq_expected = get_seq(&hdr) + 1;
 
